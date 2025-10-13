@@ -1,0 +1,19 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build
+dist/
+.next/
+out/
+coverage/
+
+# env
+.env
+.env.*.local
+.env.local
+
+# editors
+.vscode/
+.idea/
+.DS_Store
