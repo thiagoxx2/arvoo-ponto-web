@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { supabase, type Colaborador, type Empresa, type RegistroPonto } from '@/lib/supabase'
+import { supabaseClient } from '@/lib/supabaseClient'
+import { type Colaborador, type Empresa, type PontoWithDetails } from '@/types/pontos'
 import { Users, Building2, Clock, TrendingUp } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
@@ -29,7 +30,7 @@ export default function Dashboard() {
       const [colaboradoresResult, empresasResult, registrosResult] = await Promise.all([
         supabase.from('colaboradores').select('*'),
         supabase.from('empresas').select('*'),
-        supabase.from('registros_ponto').select('*')
+        supabase.from('pontos').select('*')
       ])
 
       const colaboradores = colaboradoresResult.data || []

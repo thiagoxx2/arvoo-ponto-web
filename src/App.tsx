@@ -1,6 +1,8 @@
+import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { logBootStatus, validateEnvironment } from '@/lib/supabaseClient'
 import Layout from '@/components/Layout'
 import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
@@ -55,6 +57,13 @@ function AppRoutes() {
 }
 
 function App() {
+  // Log de status no boot
+  React.useEffect(() => {
+    if (validateEnvironment()) {
+      logBootStatus()
+    }
+  }, [])
+
   return (
     <ThemeProvider>
       <AuthProvider>

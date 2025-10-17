@@ -79,18 +79,53 @@ CREATE TABLE colaboradores (
 );
 ```
 
-### Tabela: registros_ponto
+### Tabela: pontos (tabela principal)
 ```sql
-CREATE TABLE registros_ponto (
+CREATE TABLE pontos (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  colaborador_id UUID REFERENCES colaboradores(id),
-  empresa_id UUID REFERENCES empresas(id),
-  data DATE NOT NULL,
-  hora TIME NOT NULL,
-  tipo VARCHAR(10) CHECK (tipo IN ('entrada', 'saida')),
-  foto_url TEXT,
+  empresa_id UUID NOT NULL,
+  colaborador_id UUID NOT NULL,
+  tipo VARCHAR(10) CHECK (tipo IN ('entrada', 'saida')) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  foto_id UUID,
+  audit_hash TEXT
+);
+```
+
+### Tabela: fotos
+```sql
+CREATE TABLE fotos (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  empresa_id UUID NOT NULL,
+  colaborador_id UUID NOT NULL,
+  storage_path TEXT NOT NULL,
+  width INTEGER,
+  height INTEGER,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+```
+
+### Uso da Tabela pontos
+O sistema utiliza diretamente a tabela `pontos` com embeds para relacionamentos:
+
+```sql
+-- Consulta principal com embeds
+SELECT 
+    p.*,
+    colaborador:colaboradores(*),
+    empresa:empresas(*),
+    foto:fotos(storage_path)
+FROM public.pontos p
+ORDER BY created_at DESC;
+```
+
+Os campos `data` e `hora` são derivados do `created_at` no lado do cliente.
+
+### Índices para Performance
+```sql
+-- Índices para otimização de consultas
+CREATE INDEX IF NOT EXISTS idx_pontos_empresa_created_at ON public.pontos(empresa_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_colaboradores_empresa ON public.colaboradores(empresa_id);
 ```
 
 ### Storage Bucket: fotos-ponto
@@ -99,9 +134,75 @@ Configure um bucket no Supabase Storage chamado `fotos-ponto` para armazenar as 
 ### Storage Bucket: configuracoes
 Configure um bucket no Supabase Storage chamado `configuracoes` para armazenar o logo do sistema.
 
-## 🔐 Autenticação
+## 🔐 Autenticação e Políticas RLS
 
-O sistema usa Supabase Auth para autenticação. Configure as políticas RLS (Row Level Security) conforme necessário.
+O sistema usa Supabase Auth para autenticação. Configure as seguintes políticas RLS (Row Level Security):
+
+### Políticas RLS Necessárias
+
+```sql
+-- Habilitar RLS nas tabelas
+ALTER TABLE public.pontos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.fotos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.empresas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.colaboradores ENABLE ROW LEVEL SECURITY;
+
+-- Políticas para pontos
+CREATE POLICY "Permitir SELECT em pontos para usuários autenticados" ON public.pontos
+    FOR SELECT USING (auth.role() = 'authenticated');
+
+-- Políticas para fotos
+CREATE POLICY "Permitir SELECT em fotos para usuários autenticados" ON public.fotos
+    FOR SELECT USING (auth.role() = 'authenticated');
+
+-- Políticas para empresas
+CREATE POLICY "Permitir SELECT em empresas para usuários autenticados" ON public.empresas
+    FOR SELECT USING (auth.role() = 'authenticated');
+
+-- Políticas para colaboradores
+CREATE POLICY "Permitir SELECT em colaboradores para usuários autenticados" ON public.colaboradores
+    FOR SELECT USING (auth.role() = 'authenticated');
+```
+
+### Storage Buckets e Políticas
+
+```sql
+-- Criar buckets
+INSERT INTO storage.buckets (id, name, public) VALUES 
+  ('fotos', 'fotos', false), -- Bucket privado para fotos
+  ('configuracoes', 'configuracoes', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Políticas para Storage
+CREATE POLICY "Permitir visualização de fotos para usuários autenticados" ON storage.objects
+  FOR SELECT USING (bucket_id = 'fotos' AND auth.role() = 'authenticated');
+
+CREATE POLICY "Permitir upload de fotos para usuários autenticados" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'fotos' AND auth.role() = 'authenticated');
+```
+
+## 📋 Dependências do Sistema
+
+### Variáveis de Ambiente Obrigatórias
+```
+VITE_SUPABASE_URL=sua_url_do_supabase
+VITE_SUPABASE_ANON_KEY=sua_chave_anonima_do_supabase
+```
+
+### Funcionalidades da Página Pontos
+
+- **Realtime**: Assinatura automática a mudanças na tabela `pontos`
+- **Filtros**: Por data (obrigatório) e empresa (opcional)
+- **Fotos**: Suporte a URLs assinadas para buckets privados
+- **Performance**: Índices otimizados para consultas rápidas
+- **Tipos TypeScript**: Interface `RegistroPonto` com todos os campos necessários
+
+### Arquivos Criados/Modificados
+
+- `src/types/pontos.ts` - Tipos TypeScript para o sistema de pontos
+- `src/lib/supabaseSignedUrl.ts` - Helpers para URLs de fotos
+- `src/pages/Pontos.tsx` - Página refatorada com realtime e filtros
+- `supabase-migrations.sql` - Script de migração do banco
 
 ## 📱 Responsividade
 

@@ -4,7 +4,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { supabase, type RegistroPontoWithDetails, type ColaboradorWithEmpresa } from '@/lib/supabase'
+import { supabaseClient } from '@/lib/supabaseClient'
+import { type PontoWithDetails, type Colaborador } from '@/types/pontos'
 import { Download, Calendar, FileText, BarChart3, Users, Building2 } from 'lucide-react'
 import { formatDate, formatDateTime, exportToCSV } from '@/lib/utils'
 
@@ -46,7 +47,7 @@ export default function Relatorios() {
       setLoading(true)
       
       let query = supabase
-        .from('registros_ponto')
+        .from('pontos')
         .select(`
           *,
           colaborador:colaboradores(*),
@@ -54,10 +55,12 @@ export default function Relatorios() {
         `)
 
       if (filters.dataInicio) {
-        query = query.gte('data', filters.dataInicio)
+        const startDate = new Date(filters.dataInicio + 'T00:00:00.000Z')
+        query = query.gte('created_at', startDate.toISOString())
       }
       if (filters.dataFim) {
-        query = query.lte('data', filters.dataFim)
+        const endDate = new Date(filters.dataFim + 'T23:59:59.999Z')
+        query = query.lte('created_at', endDate.toISOString())
       }
       if (filters.colaboradorId) {
         query = query.eq('colaborador_id', filters.colaboradorId)
@@ -69,7 +72,21 @@ export default function Relatorios() {
       const { data, error } = await query.order('created_at', { ascending: false })
 
       if (error) throw error
-      setRegistros(data || [])
+      
+      // Processar dados para adicionar campos data e hora derivados do created_at
+      const registrosProcessados = (data || []).map(registro => {
+        const createdDate = new Date(registro.created_at)
+        const data = createdDate.toISOString().split('T')[0] // YYYY-MM-DD
+        const hora = createdDate.toTimeString().split(' ')[0] // HH:MM:SS
+        
+        return {
+          ...registro,
+          data,
+          hora
+        }
+      })
+      
+      setRegistros(registrosProcessados)
     } catch (error) {
       console.error('Erro ao carregar registros:', error)
     } finally {
