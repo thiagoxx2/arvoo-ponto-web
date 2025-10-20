@@ -39,13 +39,13 @@ export default function Colaboradores() {
   useEffect(() => {
     async function loadInitialData() {
       // Verificar se está autenticado
-      if (!session) {
+      if (!session) { 
         setError('É necessário fazer login para acessar os dados')
         setLoading(false)
         return
       }
 
-      // Evitar múltiplas chamadas simultâneas
+    // Evitar múltiplas chamadas simultâneas
       if (isLoadingData) return
 
       setLoading(true)

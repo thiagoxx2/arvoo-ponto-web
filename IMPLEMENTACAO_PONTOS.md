@@ -163,3 +163,129 @@ A especificação original solicitava criar uma view `registros_ponto`, mas a im
 
 A implementação está **completa e funcional**, utilizando a tabela `pontos` como fonte oficial de dados. Todos os requisitos foram atendidos e o comportamento é idêntico ao especificado, com a vantagem de não depender de uma view adicional.
 
+---
+
+# Implementação da Página Empresas
+
+## ✅ Status: Implementado e Funcional
+
+A página Empresas foi implementada com funcionalidades CRUD completas, tratamento de erros robusto e interface limpa.
+
+## 📊 Estrutura de Dados
+
+### Tabela: `empresas`
+```sql
+CREATE TABLE empresas (
+  id UUID PRIMARY KEY,
+  nome VARCHAR NOT NULL,
+  cnpj VARCHAR NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- Opcional
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()  -- Opcional
+);
+```
+
+## 🔧 Funcionalidades Implementadas
+
+### 1. CRUD Completo
+- **Listar**: Carrega todas as empresas com ordenação por nome
+- **Criar**: Insere nova empresa (apenas nome e cnpj)
+- **Editar**: Atualiza empresa existente (sem enviar updated_at se não existir)
+- **Excluir**: Remove empresa com confirmação
+
+### 2. Tratamento de Erros
+- **Captura de erros**: Todos os erros são capturados e exibidos
+- **UX melhorada**: Botões desabilitados durante salvamento
+- **Mensagens claras**: Erros específicos para cada operação
+
+### 3. Validação de CNPJ
+```typescript
+const formatCNPJ = (cnpj: string) => {
+  const d = cnpj.replace(/\D/g, '')
+  if (d.length !== 14) return cnpj
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
+}
+```
+
+### 4. Filtro Inteligente
+- **Por nome**: Busca case-insensitive
+- **Por CNPJ**: Normaliza ambos os valores (remove não-dígitos) antes de comparar
+
+### 5. RLS (Row Level Security)
+- **Detecção automática**: Identifica quando não há permissão
+- **Banner informativo**: Avisa sobre necessidade de policy
+- **Diagnóstico**: Console log com contagem de registros
+
+### 6. Interface Responsiva
+- **Colunas condicionais**: "Criado em" só aparece se existir no BD
+- **Estados de loading**: Spinner durante carregamento
+- **Feedback visual**: Botões desabilitados durante operações
+
+## 📁 Arquivos Modificados
+
+1. **`src/types/pontos.ts`**
+   - Interface `Empresa` com campos opcionais `created_at` e `updated_at`
+
+2. **`src/pages/Empresas.tsx`**
+   - CRUD completo com tratamento de erros
+   - Validação de CNPJ com 14 dígitos
+   - Filtro normalizado por CNPJ
+   - Banner de RLS quando necessário
+   - UX melhorada com estados de loading
+
+## 🎯 Critérios de Aceite Atendidos
+
+✅ **Rota /empresas**: Renderiza sem erros de console  
+✅ **Lista empresas**: Exibe quando há policy de SELECT ativa  
+✅ **Banner RLS**: Mostra aviso claro quando necessário  
+✅ **CRUD funcional**: Criar/editar/excluir funciona com políticas adequadas  
+✅ **Campos opcionais**: Não assume colunas que não existem  
+✅ **formatCNPJ**: Não quebra com entradas incompletas  
+✅ **Filtro CNPJ**: Compara valores normalizados  
+✅ **Tratamento de erros**: Captura e exibe erros adequadamente  
+✅ **UX melhorada**: Botões desabilitados durante salvamento  
+
+## 🚀 Como Testar
+
+### 1. Acessar /empresas
+- Deve carregar sem erros de console
+- Se não há policy de SELECT, deve mostrar banner de RLS
+
+### 2. Criar empresa
+- Preencher nome e CNPJ
+- CNPJ deve ser formatado automaticamente se tiver 14 dígitos
+- Botão deve ficar desabilitado durante salvamento
+
+### 3. Filtrar por CNPJ
+- Digitar CNPJ com ou sem formatação
+- Deve encontrar empresas independente da formatação
+
+### 4. Editar empresa
+- Não deve enviar updated_at se coluna não existir
+- Deve manter formatação do CNPJ
+
+## ⚠️ Políticas RLS Necessárias
+
+Para funcionar corretamente, são necessárias as seguintes políticas:
+
+```sql
+-- Policy de SELECT
+CREATE POLICY "Permitir SELECT em empresas" ON empresas
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+-- Policy de INSERT
+CREATE POLICY "Permitir INSERT em empresas" ON empresas
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+-- Policy de UPDATE
+CREATE POLICY "Permitir UPDATE em empresas" ON empresas
+  FOR UPDATE USING (auth.role() = 'authenticated');
+
+-- Policy de DELETE
+CREATE POLICY "Permitir DELETE em empresas" ON empresas
+  FOR DELETE USING (auth.role() = 'authenticated');
+```
+
+## 📝 Conclusão
+
+A implementação da página Empresas está **completa e funcional**, atendendo a todos os critérios especificados. A interface é limpa, o tratamento de erros é robusto e a funcionalidade CRUD está totalmente operacional.
+

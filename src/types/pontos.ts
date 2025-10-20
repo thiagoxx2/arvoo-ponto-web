@@ -27,6 +27,8 @@ export interface Empresa {
   nome: string
   cnpj: string
   cnpj_norm?: string
+  created_at?: string
+  updated_at?: string
 }
 
 // Tabela: fotos
