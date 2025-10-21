@@ -11,6 +11,8 @@ import Empresas from '@/pages/Empresas'
 import Pontos from '@/pages/Pontos'
 import Relatorios from '@/pages/Relatorios'
 import Configuracoes from '@/pages/Configuracoes'
+import Folha from '@/pages/Folha'
+import ColaboradorFolha from '@/pages/ColaboradorFolha'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -47,6 +49,8 @@ function AppRoutes() {
                 <Route path="/pontos" element={<Pontos />} />
                 <Route path="/relatorios" element={<Relatorios />} />
                 <Route path="/configuracoes" element={<Configuracoes />} />
+                <Route path="/folha" element={<Folha />} />
+                <Route path="/colaboradores/:id/folha" element={<ColaboradorFolha />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

@@ -4,14 +4,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
-import { supabaseClient } from '@/lib/supabaseClient'
+import { supabaseClient as supabase } from '@/lib/supabaseClient'
 import { useTheme } from '@/contexts/ThemeContext'
 import { Upload, Image, Settings, Palette, Database, Info } from 'lucide-react'
 
 export default function Configuracoes() {
   const { theme, toggleTheme } = useTheme()
   const [logo, setLogo] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [config, setConfig] = useState({
     nomeSistema: 'Arvoo Ponto',
@@ -63,7 +62,7 @@ export default function Configuracoes() {
       setUploading(true)
 
       // Upload para Supabase Storage
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('configuracoes')
         .upload('logo.png', file, {
           cacheControl: '3600',

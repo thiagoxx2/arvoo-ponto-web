@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { supabaseClient } from '@/lib/supabaseClient'
 import { useAuth } from '@/contexts/AuthContext'
 import { type Colaborador, type Empresa } from '@/types/pontos'
-import { Plus, Search, Edit, Trash2, Building2, AlertCircle, Wifi, WifiOff } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Building2, AlertCircle } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
 // Tipo para colaborador com empresa
@@ -26,7 +26,6 @@ export default function Colaboradores() {
   const [searchTerm, setSearchTerm] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingColaborador, setEditingColaborador] = useState<Colaborador | null>(null)
-  const [realtimeStatus, setRealtimeStatus] = useState<'CONNECTING' | 'SUBSCRIBED' | 'CLOSED' | 'ERROR'>('CONNECTING')
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [formData, setFormData] = useState({
     nome: '',
@@ -148,7 +147,6 @@ export default function Colaboradores() {
       )
       .subscribe((status) => {
         console.log('📡 Status Realtime:', status)
-        setRealtimeStatus(status === 'SUBSCRIBED' ? 'SUBSCRIBED' : status === 'CLOSED' ? 'CLOSED' : 'ERROR')
         
         if (status === 'CHANNEL_ERROR') {
           console.warn('⚠️ Realtime desabilitado no projeto ou bloqueado pela rede')
@@ -322,27 +320,6 @@ export default function Colaboradores() {
           <p className="text-muted-foreground">
             Gerencie os colaboradores do sistema
           </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          {/* Status do Realtime */}
-          <div className="flex items-center space-x-2 text-sm">
-            {realtimeStatus === 'SUBSCRIBED' ? (
-              <div className="flex items-center space-x-1 text-green-600">
-                <Wifi className="h-4 w-4" />
-                <span>Conectado</span>
-              </div>
-            ) : realtimeStatus === 'ERROR' ? (
-              <div className="flex items-center space-x-1 text-red-600">
-                <WifiOff className="h-4 w-4" />
-                <span>Realtime desabilitado</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-1 text-yellow-600">
-                <WifiOff className="h-4 w-4" />
-                <span>Conectando...</span>
-              </div>
-            )}
-          </div>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>

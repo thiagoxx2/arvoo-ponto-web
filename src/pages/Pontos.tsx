@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { supabaseClient } from '@/lib/supabaseClient'
 import { useAuth } from '@/contexts/AuthContext'
 import { type PontoWithDetails } from '@/types/pontos'
-import { Search, Eye, Calendar, Clock, User, Building2, Download, AlertCircle, Wifi, WifiOff } from 'lucide-react'
+import { Search, Eye, Calendar, Clock, User, Building2, Download, AlertCircle } from 'lucide-react'
 
 export default function Pontos() {
   const { session, loading: authLoading } = useAuth()
@@ -20,7 +20,6 @@ export default function Pontos() {
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<string>('')
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false)
-  const [realtimeStatus, setRealtimeStatus] = useState<'CONNECTING' | 'SUBSCRIBED' | 'CLOSED' | 'ERROR'>('CONNECTING')
   const [isLoadingData, setIsLoadingData] = useState(false)
 
   // Carregar dados uma vez ao acessar a página (apenas se autenticado)
@@ -133,7 +132,6 @@ export default function Pontos() {
       )
       .subscribe((status) => {
         console.log('📡 Status Realtime:', status)
-        setRealtimeStatus(status === 'SUBSCRIBED' ? 'SUBSCRIBED' : status === 'CLOSED' ? 'CLOSED' : 'ERROR')
         
         if (status === 'CHANNEL_ERROR') {
           console.warn('⚠️ Realtime desabilitado no projeto ou bloqueado pela rede')
@@ -258,27 +256,6 @@ export default function Pontos() {
           <p className="text-muted-foreground">
             Visualize todos os registros de ponto do sistema
           </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          {/* Status do Realtime */}
-          <div className="flex items-center space-x-2 text-sm">
-            {realtimeStatus === 'SUBSCRIBED' ? (
-              <div className="flex items-center space-x-1 text-green-600">
-                <Wifi className="h-4 w-4" />
-                <span>Conectado</span>
-              </div>
-            ) : realtimeStatus === 'ERROR' ? (
-              <div className="flex items-center space-x-1 text-red-600">
-                <WifiOff className="h-4 w-4" />
-                <span>Realtime desabilitado</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-1 text-yellow-600">
-                <WifiOff className="h-4 w-4" />
-                <span>Conectando...</span>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 

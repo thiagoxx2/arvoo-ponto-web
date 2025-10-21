@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabaseClient as supabase } from './supabaseClient'
 
 /**
  * Gera URL para acessar foto no storage

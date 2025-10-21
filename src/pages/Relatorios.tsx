@@ -4,14 +4,24 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { supabaseClient } from '@/lib/supabaseClient'
+import { supabaseClient as supabase } from '@/lib/supabaseClient'
 import { type PontoWithDetails, type Colaborador } from '@/types/pontos'
 import { Download, Calendar, FileText, BarChart3, Users, Building2 } from 'lucide-react'
 import { formatDate, formatDateTime, exportToCSV } from '@/lib/utils'
 
+/** Tipo local para enriquecer o Ponto com campos derivados para a UI */
+type PontoWithDetailsUI = PontoWithDetails & {
+  data: string; // YYYY-MM-DD derivado de created_at
+  hora: string; // HH:MM:SS  derivado de created_at
+}
+
+/** Tipo local para garantir que 'empresa' exista em Colaborador (vindo do SELECT com alias empresa:empresas(*)) */
+type EmpresaRef = { id: string; nome: string; cnpj: string; created_at?: string }
+type ColaboradorComEmpresa = Colaborador & { empresa: EmpresaRef }
+
 export default function Relatorios() {
-  const [registros, setRegistros] = useState<RegistroPontoWithDetails[]>([])
-  const [colaboradores, setColaboradores] = useState<ColaboradorWithEmpresa[]>([])
+  const [registros, setRegistros] = useState<PontoWithDetailsUI[]>([])
+  const [colaboradores, setColaboradores] = useState<ColaboradorComEmpresa[]>([])
   const [loading, setLoading] = useState(false)
   const [filters, setFilters] = useState({
     dataInicio: '',
@@ -19,7 +29,6 @@ export default function Relatorios() {
     colaboradorId: '',
     empresaId: ''
   })
-  const [selectedReport, setSelectedReport] = useState<'pontos' | 'colaboradores' | 'empresas'>('pontos')
 
   useEffect(() => {
     loadColaboradores()
@@ -36,7 +45,7 @@ export default function Relatorios() {
         .order('nome')
 
       if (error) throw error
-      setColaboradores(data || [])
+      setColaboradores((data as ColaboradorComEmpresa[]) || [])
     } catch (error) {
       console.error('Erro ao carregar colaboradores:', error)
     }
@@ -74,15 +83,15 @@ export default function Relatorios() {
       if (error) throw error
       
       // Processar dados para adicionar campos data e hora derivados do created_at
-      const registrosProcessados = (data || []).map(registro => {
-        const createdDate = new Date(registro.created_at)
-        const data = createdDate.toISOString().split('T')[0] // YYYY-MM-DD
-        const hora = createdDate.toTimeString().split(' ')[0] // HH:MM:SS
+      const registrosProcessados: PontoWithDetailsUI[] = (data as PontoWithDetails[] || []).map((registro) => {
+        const createdDate = new Date(registro.created_at as unknown as string)
+        const dataStr = createdDate.toISOString().split('T')[0] // YYYY-MM-DD
+        const horaStr = createdDate.toTimeString().split(' ')[0] // HH:MM:SS
         
         return {
           ...registro,
-          data,
-          hora
+          data: dataStr,
+          hora: horaStr
         }
       })
       
@@ -103,46 +112,47 @@ export default function Relatorios() {
   }
 
   const exportRegistrosCSV = () => {
-    const csvData = registros.map(registro => ({
+    const csvData = registros.map((registro) => ({
       'Data': formatDate(registro.data),
       'Hora': registro.hora,
       'Tipo': registro.tipo === 'entrada' ? 'Entrada' : 'Saída',
-      'Colaborador': registro.colaborador.nome,
-      'PIN': registro.colaborador.pin,
-      'Empresa': registro.empresa.nome,
-      'CNPJ': registro.empresa.cnpj,
-      'Registrado em': formatDateTime(registro.created_at)
+      'Colaborador': (registro as any).colaborador?.nome ?? '',
+      'PIN': (registro as any).colaborador?.pin ?? '',
+      'Empresa': (registro as any).empresa?.nome ?? '',
+      'CNPJ': (registro as any).empresa?.cnpj ?? '',
+      'Registrado em': formatDateTime(registro.created_at as unknown as string)
     }))
 
     exportToCSV(csvData, `relatorio_pontos_${filters.dataInicio || 'inicio'}_${filters.dataFim || 'fim'}`)
   }
 
   const exportColaboradoresCSV = () => {
-    const csvData = colaboradores.map(colaborador => ({
+    const csvData = colaboradores.map((colaborador) => ({
       'Nome': colaborador.nome,
-      'PIN': colaborador.pin,
+      'PIN': (colaborador as any).pin ?? '',
       'Status': colaborador.ativo ? 'Ativo' : 'Inativo',
-      'Empresa': colaborador.empresa.nome,
-      'CNPJ': colaborador.empresa.cnpj,
-      'Criado em': formatDate(colaborador.created_at)
+      'Empresa': colaborador.empresa?.nome ?? '',
+      'CNPJ': colaborador.empresa?.cnpj ?? '',
+      'Criado em': formatDate(colaborador.created_at as unknown as string)
     }))
 
     exportToCSV(csvData, 'relatorio_colaboradores')
   }
 
   const exportEmpresasCSV = () => {
-    const empresas = colaboradores.reduce((acc, colaborador) => {
+    const empresas: EmpresaRef[] = colaboradores.reduce<EmpresaRef[]>((acc, colaborador) => {
       const empresa = colaborador.empresa
+      if (!empresa) return acc
       if (!acc.find(e => e.id === empresa.id)) {
         acc.push(empresa)
       }
       return acc
-    }, [] as any[])
+    }, [])
 
-    const csvData = empresas.map(empresa => ({
+    const csvData = empresas.map((empresa) => ({
       'Nome': empresa.nome,
       'CNPJ': empresa.cnpj,
-      'Criado em': formatDate(empresa.created_at)
+      'Criado em': formatDate(empresa.created_at ?? '')
     }))
 
     exportToCSV(csvData, 'relatorio_empresas')
@@ -152,8 +162,8 @@ export default function Relatorios() {
     const totalRegistros = registros.length
     const entradas = registros.filter(r => r.tipo === 'entrada').length
     const saidas = registros.filter(r => r.tipo === 'saida').length
-    const colaboradoresUnicos = new Set(registros.map(r => r.colaborador_id)).size
-    const empresasUnicas = new Set(registros.map(r => r.empresa_id)).size
+    const colaboradoresUnicos = new Set(registros.map(r => (r as any).colaborador_id)).size
+    const empresasUnicas = new Set(registros.map(r => (r as any).empresa_id)).size
 
     return {
       totalRegistros,
@@ -212,7 +222,7 @@ export default function Relatorios() {
                 onChange={(e) => handleFilterChange('colaboradorId', e.target.value)}
               >
                 <option value="">Todos os colaboradores</option>
-                {colaboradores.map(colaborador => (
+                {colaboradores.map((colaborador) => (
                   <option key={colaborador.id} value={colaborador.id}>
                     {colaborador.nome}
                   </option>
@@ -228,10 +238,10 @@ export default function Relatorios() {
                 onChange={(e) => handleFilterChange('empresaId', e.target.value)}
               >
                 <option value="">Todas as empresas</option>
-                {Array.from(new Set(colaboradores.map(c => c.empresa.id))).map(empresaId => {
-                  const empresa = colaboradores.find(c => c.empresa.id === empresaId)?.empresa
+                {Array.from(new Set(colaboradores.map(c => c.empresa?.id).filter(Boolean))).map((empresaId) => {
+                  const empresa = colaboradores.find(c => c.empresa?.id === empresaId)?.empresa
                   return (
-                    <option key={empresaId} value={empresaId}>
+                    <option key={empresaId as string} value={empresaId as string}>
                       {empresa?.nome}
                     </option>
                   )
@@ -397,7 +407,7 @@ export default function Relatorios() {
                 </TableHeader>
                 <TableBody>
                   {registros.slice(0, 10).map((registro) => (
-                    <TableRow key={registro.id}>
+                    <TableRow key={registro.id as unknown as string}>
                       <TableCell>{formatDate(registro.data)}</TableCell>
                       <TableCell>{registro.hora}</TableCell>
                       <TableCell>
@@ -409,9 +419,9 @@ export default function Relatorios() {
                           {registro.tipo === 'entrada' ? 'Entrada' : 'Saída'}
                         </span>
                       </TableCell>
-                      <TableCell>{registro.colaborador.nome}</TableCell>
-                      <TableCell>{registro.empresa.nome}</TableCell>
-                      <TableCell>{formatDateTime(registro.created_at)}</TableCell>
+                      <TableCell>{(registro as any).colaborador?.nome ?? ''}</TableCell>
+                      <TableCell>{(registro as any).empresa?.nome ?? ''}</TableCell>
+                      <TableCell>{formatDateTime(registro.created_at as unknown as string)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

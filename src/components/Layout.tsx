@@ -15,7 +15,8 @@ import {
   Menu,
   X,
   Moon,
-  Sun
+  Sun,
+  FileText
 } from 'lucide-react'
 
 const navigation = [
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Colaboradores', href: '/colaboradores', icon: Users },
   { name: 'Empresas', href: '/empresas', icon: Building2 },
   { name: 'Pontos', href: '/pontos', icon: Clock },
+  { name: 'Folha de Ponto', href: '/folha', icon: FileText },
   { name: 'Relatórios', href: '/relatorios', icon: BarChart3 },
   { name: 'Configurações', href: '/configuracoes', icon: Settings },
 ]

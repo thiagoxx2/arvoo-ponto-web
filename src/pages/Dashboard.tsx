@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { supabaseClient } from '@/lib/supabaseClient'
 import { Users, Building2, Clock, TrendingUp } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { HorasMesCard } from '../components/dashboard/HorasMesCard'
+import { useNavigate } from 'react-router-dom'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042']
 
@@ -33,6 +35,7 @@ const getTimezoneDates = () => {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const [stats, setStats] = useState({
     totalColaboradores: 0,
     totalEmpresas: 0,
@@ -42,6 +45,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [registrosPorDia, setRegistrosPorDia] = useState<{ data: string; registros: number }[]>([])
   const [registrosPorTipo, setRegistrosPorTipo] = useState<{ name: string; value: number }[]>([])
+  const [colaboradorSelecionado] = useState<{ id: string; nome: string } | null>(null)
 
   useEffect(() => {
     loadDashboardData()
@@ -240,6 +244,15 @@ export default function Dashboard() {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Card de Horas Trabalhadas */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <HorasMesCard
+          colaboradorId={colaboradorSelecionado?.id || null}
+          colaboradorNome={colaboradorSelecionado?.nome}
+          onVerFolha={() => navigate('/folha')}
+        />
       </div>
 
       {/* Gráficos */}
