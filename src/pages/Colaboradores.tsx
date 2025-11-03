@@ -14,7 +14,7 @@ import { formatDate } from '@/lib/utils'
 
 // Tipo para colaborador com empresa
 type ColaboradorWithEmpresa = Colaborador & {
-  empresa: Empresa
+  empresa?: Empresa | null
 }
 
 export default function Colaboradores() {
@@ -72,16 +72,21 @@ export default function Colaboradores() {
 
         if (colaboradoresError) throw colaboradoresError
 
-        // Carregar apenas a empresa do JWT para o formulário
+        // Carregar todas as empresas permitidas pela RLS (ordenadas por nome)
         const { data: empresasData, error: empresasError } = await supabaseClient
           .from('empresas')
           .select('*')
-          .eq('id', jwtEmpresaId)
+          .order('nome', { ascending: true })
 
         if (empresasError) throw empresasError
 
         setColaboradores(colaboradoresData || [])
         setEmpresas(empresasData || [])
+        
+        // Pré-seleção quando há exatamente 1 empresa e formData.empresa_id está vazio
+        if ((empresasData?.length ?? 0) === 1 && !formData.empresa_id) {
+          setFormData(prev => ({ ...prev, empresa_id: empresasData![0].id }))
+        }
         
         // Verificar se retornou vazio
         if (colaboradoresData && colaboradoresData.length === 0) {
@@ -261,10 +266,11 @@ export default function Colaboradores() {
     setEditingColaborador(null)
   }
 
-  const filteredColaboradores = colaboradores.filter(colaborador =>
-    colaborador.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    colaborador.pin_hash.includes(searchTerm) ||
-    colaborador.empresa.nome.toLowerCase().includes(searchTerm.toLowerCase())
+  const normalizedSearch = searchTerm.toLowerCase()
+  const filteredColaboradores = colaboradores.filter((c) =>
+    c.nome?.toLowerCase().includes(normalizedSearch) ||
+    (c.pin_hash ?? '').includes(searchTerm) ||
+    (c.empresa?.nome?.toLowerCase() ?? '').includes(normalizedSearch)
   )
 
   if (authLoading) {
@@ -364,14 +370,16 @@ export default function Colaboradores() {
                 <select
                   id="empresa"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={formData.empresa_id}
-                  onChange={(e) => setFormData({ ...formData, empresa_id: e.target.value })}
+                  value={formData.empresa_id ?? ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, empresa_id: e.target.value }))
+                  }
                   required
                 >
-                  <option value="">Selecione uma empresa</option>
-                  {empresas.map(empresa => (
-                    <option key={empresa.id} value={empresa.id}>
-                      {empresa.nome}
+                  <option value="" disabled>Selecione uma empresa</option>
+                  {empresas.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.nome}
                     </option>
                   ))}
                 </select>
@@ -425,7 +433,6 @@ export default function Colaboradores() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead>PIN</TableHead>
                   <TableHead>Empresa</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criado em</TableHead>
@@ -436,11 +443,10 @@ export default function Colaboradores() {
                 {filteredColaboradores.map((colaborador) => (
                   <TableRow key={colaborador.id}>
                     <TableCell className="font-medium">{colaborador.nome}</TableCell>
-                    <TableCell>{colaborador.pin_hash}</TableCell>
                     <TableCell>
                       <div className="flex items-center">
                         <Building2 className="mr-2 h-4 w-4 text-muted-foreground" />
-                        {colaborador.empresa.nome}
+                        {colaborador.empresa?.nome ?? '—'}
                       </div>
                     </TableCell>
                     <TableCell>
