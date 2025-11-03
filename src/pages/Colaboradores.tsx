@@ -168,30 +168,32 @@ export default function Colaboradores() {
     e.preventDefault()
     
     try {
-      // Descobrir empresa_id do JWT (sempre usar do JWT, não do form)
+      // Descobrir empresa_id do JWT (fallback)
       const jwtEmpresaId = 
         (session?.user as any)?.app_metadata?.empresa_id ??
         (session?.user as any)?.user_metadata?.empresa_id ?? ''
       
-      const safeEmpresaId = jwtEmpresaId || formData.empresa_id // preferir JWT
+      // Priorizar formData.empresa_id sobre jwtEmpresaId
+      const safeEmpresaId = formData.empresa_id || jwtEmpresaId
       
-      if (!jwtEmpresaId) {
-        console.error('[RLS A] JWT missing empresa_id')
-        setError('JWT sem empresa_id - operação bloqueada')
+      if (!safeEmpresaId) {
+        setError('Selecione uma empresa para o colaborador.')
         return
       }
 
       if (editingColaborador) {
         // Atualizar colaborador
+        const updatePayload = {
+          nome: formData.nome,
+          pin_hash: formData.pin, // TODO: hash server-side
+          ativo: formData.ativo,
+          empresa_id: safeEmpresaId,
+          updated_at: new Date().toISOString()
+        }
+        
         const { error } = await supabaseClient
           .from('colaboradores')
-          .update({
-            nome: formData.nome,
-            pin_hash: formData.pin, // TODO: hash server-side
-            ativo: formData.ativo,
-            empresa_id: safeEmpresaId, // usar do JWT
-            updated_at: new Date().toISOString()
-          })
+          .update(updatePayload)
           .eq('id', editingColaborador.id)
 
         if (error) {
@@ -200,14 +202,16 @@ export default function Colaboradores() {
         }
       } else {
         // Criar novo colaborador
+        const insertPayload = {
+          nome: formData.nome,
+          pin_hash: formData.pin, // TODO: hash server-side
+          ativo: formData.ativo,
+          empresa_id: safeEmpresaId
+        }
+        
         const { error } = await supabaseClient
           .from('colaboradores')
-          .insert({
-            nome: formData.nome,
-            pin_hash: formData.pin, // TODO: hash server-side
-            ativo: formData.ativo,
-            empresa_id: safeEmpresaId // usar do JWT
-          })
+          .insert(insertPayload)
 
         if (error) {
           console.error('[RLS A] Insert/Update blocked by policy')
@@ -396,7 +400,7 @@ export default function Colaboradores() {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit">
+                <Button type="submit" disabled={!formData.empresa_id}>
                   {editingColaborador ? 'Atualizar' : 'Criar'}
                 </Button>
               </div>
