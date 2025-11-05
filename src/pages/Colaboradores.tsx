@@ -27,6 +27,7 @@ export default function Colaboradores() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingColaborador, setEditingColaborador] = useState<Colaborador | null>(null)
   const [isLoadingData, setIsLoadingData] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     nome: '',
     pin: '', // TODO: migrar para pin_hash via Edge Function (hash server-side)
@@ -167,6 +168,9 @@ export default function Colaboradores() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    setIsSubmitting(true)
+    setError(null)
+    
     try {
       // Descobrir empresa_id do JWT (fallback)
       const jwtEmpresaId = 
@@ -177,7 +181,9 @@ export default function Colaboradores() {
       const safeEmpresaId = formData.empresa_id || jwtEmpresaId
       
       if (!safeEmpresaId) {
-        setError('Selecione uma empresa para o colaborador.')
+        const msg = 'Selecione uma empresa para o colaborador.'
+        setError(msg)
+        setIsSubmitting(false)
         return
       }
 
@@ -201,17 +207,17 @@ export default function Colaboradores() {
           throw error
         }
       } else {
-        // Criar novo colaborador
-        const insertPayload = {
-          nome: formData.nome,
-          pin_hash: formData.pin, // TODO: hash server-side
-          ativo: formData.ativo,
-          empresa_id: safeEmpresaId
+        // Criar novo colaborador via RPC (hash no servidor com crypt())
+        if (!/^\d{4,6}$/.test(formData.pin)) {
+          throw new Error('PIN deve ter 4 a 6 dígitos.')
         }
-        
         const { error } = await supabaseClient
-          .from('colaboradores')
-          .insert(insertPayload)
+          .rpc('colaborador_create', {
+            p_nome: formData.nome,
+            p_pin: formData.pin,
+            p_ativo: formData.ativo,
+            p_empresa_id: safeEmpresaId
+          })
 
         if (error) {
           console.error('[RLS A] Insert/Update blocked by policy')
@@ -219,12 +225,20 @@ export default function Colaboradores() {
         }
       }
 
+      console.log('✅ Colaborador salvo com sucesso.')
+      
+      // Fechar modal
       setIsDialogOpen(false)
       resetForm()
+      setEditingColaborador(null)
+      
       // Realtime vai recarregar automaticamente
-    } catch (error: any) {
-      console.error('Erro ao salvar colaborador:', error)
-      setError(error.message || 'Erro ao salvar colaborador')
+    } catch (err: any) {
+      const msg = err?.message ?? 'Falha ao salvar colaborador.'
+      setError(msg)
+      console.error('❌ Erro ao salvar colaborador:', msg)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -232,7 +246,7 @@ export default function Colaboradores() {
     setEditingColaborador(colaborador)
     setFormData({
       nome: colaborador.nome,
-      pin: colaborador.pin_hash, // TODO: não deveria expor hash
+      pin: '', // nunca expor hash; usuário só altera se digitar novo PIN
       ativo: colaborador.ativo,
       empresa_id: colaborador.empresa_id
     })
@@ -273,7 +287,6 @@ export default function Colaboradores() {
   const normalizedSearch = searchTerm.toLowerCase()
   const filteredColaboradores = colaboradores.filter((c) =>
     c.nome?.toLowerCase().includes(normalizedSearch) ||
-    (c.pin_hash ?? '').includes(searchTerm) ||
     (c.empresa?.nome?.toLowerCase() ?? '').includes(normalizedSearch)
   )
 
@@ -400,8 +413,8 @@ export default function Colaboradores() {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={!formData.empresa_id}>
-                  {editingColaborador ? 'Atualizar' : 'Criar'}
+                <Button type="submit" disabled={isSubmitting || !formData.empresa_id}>
+                  {isSubmitting ? 'Salvando...' : editingColaborador ? 'Atualizar' : 'Criar'}
                 </Button>
               </div>
             </form>
