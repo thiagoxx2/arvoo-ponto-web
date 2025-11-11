@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { type PontoWithDetails } from '@/types/pontos'
 import { Search, Eye, Calendar, Clock, User, Building2, Download, AlertCircle } from 'lucide-react'
 import { sanitizeFilename, fmtDateForFilename, getExtensionFromMimeType } from '@/utils/fileUtils'
+import { getPublicPhotoUrl, getFotosBucket } from '@/utils/photoUrl'
 
 // SVG placeholder para imagens quebradas
 const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzZiNzI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkZvdG8gaW5kaXNwb27DrXZlbDwvdGV4dD48L3N2Zz4='
@@ -25,6 +26,9 @@ export default function Pontos() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(false)
+  
+  // Bucket configurável via ENV
+  const BUCKET = getFotosBucket()
 
   // Carregar dados uma vez ao acessar a página (apenas se autenticado)
   useEffect(() => {
@@ -177,16 +181,9 @@ export default function Pontos() {
     setIsImageDialogOpen(true)
   }
 
-  // Função para gerar URL da foto (público ou privado)
+  // Função wrapper para gerar URL da foto usando util centralizado
   const getPhotoUrl = (storagePath: string): string => {
-    // Se o storage_path já é uma URL completa, retornar como está
-    if (storagePath.startsWith('http')) {
-      return storagePath
-    }
-    
-    // Para buckets públicos, usar getPublicUrl
-    const { data } = supabaseClient.storage.from('fotos-pontos').getPublicUrl(storagePath)
-    return data.publicUrl
+    return getPublicPhotoUrl(supabaseClient, BUCKET, storagePath)
   }
 
   const downloadImage = async (imageUrl: string, rawName: string) => {
