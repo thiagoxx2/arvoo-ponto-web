@@ -8,6 +8,10 @@ import { supabaseClient } from '@/lib/supabaseClient'
 import { useAuth } from '@/contexts/AuthContext'
 import { type PontoWithDetails } from '@/types/pontos'
 import { Search, Eye, Calendar, Clock, User, Building2, Download, AlertCircle } from 'lucide-react'
+import { sanitizeFilename, fmtDateForFilename, getExtensionFromMimeType } from '@/utils/fileUtils'
+
+// SVG placeholder para imagens quebradas
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzZiNzI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkZvdG8gaW5kaXNwb27DrXZlbDwvdGV4dD48L3N2Zz4='
 
 export default function Pontos() {
   const { session, loading: authLoading } = useAuth()
@@ -185,20 +189,79 @@ export default function Pontos() {
     return data.publicUrl
   }
 
-  const downloadImage = async (imageUrl: string, filename: string) => {
+  const downloadImage = async (imageUrl: string, rawName: string) => {
+    const isDiagnostics = import.meta.env.VITE_DIAGNOSTICS === '1'
+    
     try {
+      if (isDiagnostics) {
+        console.log('📥 [Download] Iniciando:', imageUrl)
+      }
+      
       const response = await fetch(imageUrl)
+      
+      // Validar resposta HTTP
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type') || 'unknown'
+        let errorBody = ''
+        
+        try {
+          errorBody = await response.text()
+        } catch (e) {
+          errorBody = '(não foi possível ler o corpo da resposta)'
+        }
+        
+        console.error(`❌ [Download] Falha HTTP ${response.status} ${response.statusText}`)
+        console.error(`Content-Type recebido: ${contentType}`)
+        console.error(`Corpo da resposta (primeiros 500 chars):`, errorBody.substring(0, 500))
+        
+        throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const blob = await response.blob()
+      
+      // Validar Content-Type
+      if (!blob.type.startsWith('image/')) {
+        console.error(`❌ [Download] Content-Type inválido: ${blob.type} (esperado image/*)`)
+        console.error(`Blob size: ${blob.size} bytes`)
+        
+        // Tentar ler conteúdo se for pequeno (pode ser JSON/HTML de erro)
+        if (blob.size < 10000) {
+          const text = await blob.text()
+          console.error(`Conteúdo recebido (primeiros 500 chars):`, text.substring(0, 500))
+        }
+        
+        throw new Error(`Download retornou ${blob.type || 'tipo desconhecido'} em vez de imagem`)
+      }
+
+      // Determinar extensão pelo MIME type usando util
+      const ext = getExtensionFromMimeType(blob.type)
+
+      // Sanitizar nome do arquivo
+      const safeName = sanitizeFilename(rawName)
+      const filename = `${safeName}.${ext}`
+
+      if (isDiagnostics) {
+        console.log(`✅ [Download] Válido: ${blob.type}, ${blob.size} bytes → ${filename}`)
+      }
+
+      // Download seguro
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = filename
       document.body.appendChild(a)
       a.click()
+      
+      // Cleanup
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
+      
+      if (!isDiagnostics) {
+        console.log(`✅ [Download] Sucesso: ${filename}`)
+      }
     } catch (error) {
-      console.error('Erro ao baixar imagem:', error)
+      console.error('❌ [Download] Erro:', error)
+      alert(`Não foi possível baixar a imagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
     }
   }
 
@@ -366,8 +429,8 @@ export default function Pontos() {
                               className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80"
                               onClick={() => handleImageClick(getPhotoUrl(ponto.foto!.storage_path))}
                               onError={(e) => {
-                                console.error('Erro ao carregar foto:', e)
-                                e.currentTarget.style.display = 'none'
+                                console.error('[Preview] Erro ao carregar foto')
+                                e.currentTarget.src = PLACEHOLDER_IMAGE
                               }}
                             />
                             <Button
@@ -387,10 +450,12 @@ export default function Pontos() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => downloadImage(
-                              getPhotoUrl(ponto.foto!.storage_path), 
-                              `ponto_${ponto.colaborador.nome}_${dataFormatada}_${horaFormatada}.jpg`
-                            )}
+                            onClick={() => {
+                              const timestamp = fmtDateForFilename(data)
+                              const colaborador = ponto.colaborador.nome
+                              const filename = `ponto_${colaborador}_${timestamp}`
+                              downloadImage(getPhotoUrl(ponto.foto!.storage_path), filename)
+                            }}
                           >
                             <Download className="h-4 w-4" />
                           </Button>
@@ -421,14 +486,19 @@ export default function Pontos() {
                   src={selectedImage}
                   alt="Foto do ponto"
                   className="max-w-full max-h-96 rounded-lg object-contain"
+                  onError={(e) => {
+                    console.error('[Modal] Erro ao carregar foto')
+                    e.currentTarget.src = PLACEHOLDER_IMAGE
+                  }}
                 />
               </div>
               <div className="flex justify-center space-x-2">
                 <Button
-                  onClick={() => downloadImage(
-                    selectedImage, 
-                    `ponto_${new Date().toISOString().split('T')[0]}.jpg`
-                  )}
+                  onClick={() => {
+                    const timestamp = fmtDateForFilename(new Date())
+                    const filename = `ponto_${timestamp}`
+                    downloadImage(selectedImage, filename)
+                  }}
                 >
                   <Download className="mr-2 h-4 w-4" />
                   Baixar Imagem
