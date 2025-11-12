@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { type PontoWithDetails } from '@/types/pontos'
 import { Search, Eye, Calendar, Clock, User, Building2, Download, AlertCircle } from 'lucide-react'
 import { sanitizeFilename, fmtDateForFilename, getExtensionFromMimeType } from '@/utils/fileUtils'
-import { getPhotoUrl } from '@/utils/photoUrl'
+import { getPhotoUrl, refreshPhotoUrl, isPhotoUrlExpired, isFotosBucketPrivate } from '@/utils/photoUrl'
 
 // SVG placeholder para imagens quebradas
 const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzZiNzI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkZvdG8gaW5kaXNwb27DrXZlbDwvdGV4dD48L3N2Zz4='
@@ -24,11 +24,15 @@ export default function Pontos() {
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<string>('')
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [selectedImagePath, setSelectedImagePath] = useState<string | null>(null)
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(false)
   
   // Cache de URLs de fotos para evitar regenerar signed URLs
   const [photoUrls, setPhotoUrls] = useState<Map<string, string>>(new Map())
+  
+  // Rastrear tentativas de refresh para evitar loops infinitos
+  const [refreshAttempts, setRefreshAttempts] = useState<Map<string, number>>(new Map())
 
   // Carregar dados uma vez ao acessar a página (apenas se autenticado)
   useEffect(() => {
@@ -196,21 +200,37 @@ export default function Pontos() {
     ? registrosPorData.filter(ponto => ponto.empresa_id === selectedEmpresaId)
     : registrosPorData
 
-  const handleImageClick = (imageUrl: string) => {
+  const handleImageClick = (imageUrl: string, storagePath?: string) => {
     setSelectedImage(imageUrl)
+    setSelectedImagePath(storagePath || null)
     setIsImageDialogOpen(true)
   }
 
-  // Função para resolver URL de foto (busca no cache ou gera nova)
-  const resolvePhotoUrl = async (storagePath: string): Promise<string> => {
-    // Verificar cache primeiro
-    if (photoUrls.has(storagePath)) {
+  // Função para resolver URL de foto com verificação de expiração
+  const resolvePhotoUrl = async (storagePath: string, forceRefresh: boolean = false): Promise<string> => {
+    const isPrivate = isFotosBucketPrivate()
+    
+    // Se bucket público, não precisa verificar expiração
+    if (!isPrivate && !forceRefresh && photoUrls.has(storagePath)) {
       return photoUrls.get(storagePath)!
     }
     
-    // Gerar nova URL (pública ou signed)
+    // Para buckets privados, verificar expiração
+    if (isPrivate && !forceRefresh && photoUrls.has(storagePath)) {
+      // Se URL ainda é válida (não expirou), usar do cache
+      if (!isPhotoUrlExpired(storagePath)) {
+        return photoUrls.get(storagePath)!
+      }
+      
+      // URL expirou, forçar refresh
+      console.debug('[resolvePhotoUrl] URL expirada, fazendo refresh:', storagePath.substring(0, 50))
+    }
+    
+    // Gerar nova URL (pública ou signed, com possível refresh)
     try {
-      const url = await getPhotoUrl(supabaseClient, storagePath)
+      const url = forceRefresh && isPrivate
+        ? await refreshPhotoUrl(supabaseClient, storagePath)
+        : await getPhotoUrl(supabaseClient, storagePath)
       
       // Salvar no cache
       setPhotoUrls(prev => new Map(prev).set(storagePath, url))
@@ -219,6 +239,56 @@ export default function Pontos() {
     } catch (error) {
       console.error('[resolvePhotoUrl] Erro ao gerar URL:', error)
       return PLACEHOLDER_IMAGE
+    }
+  }
+
+  // Handler para onError de imagens com auto-refresh inteligente
+  const handleImageError = async (
+    e: React.SyntheticEvent<HTMLImageElement>,
+    storagePath: string
+  ) => {
+    const isPrivate = isFotosBucketPrivate()
+    
+    // Se bucket público, não tentar refresh (erro real)
+    if (!isPrivate) {
+      console.error('[Preview] Erro ao carregar foto (público)')
+      e.currentTarget.src = PLACEHOLDER_IMAGE
+      return
+    }
+    
+    // Verificar tentativas anteriores (evitar loop infinito)
+    const attempts = refreshAttempts.get(storagePath) || 0
+    if (attempts >= 2) {
+      console.error('[Preview] Máximo de tentativas de refresh atingido')
+      e.currentTarget.src = PLACEHOLDER_IMAGE
+      return
+    }
+    
+    // Incrementar contador de tentativas
+    setRefreshAttempts(prev => new Map(prev).set(storagePath, attempts + 1))
+    
+    try {
+      console.debug('[Preview] Tentando refresh da URL expirada/inválida')
+      
+      // Forçar refresh da URL
+      const newUrl = await refreshPhotoUrl(supabaseClient, storagePath)
+      
+      // Atualizar cache
+      setPhotoUrls(prev => new Map(prev).set(storagePath, newUrl))
+      
+      // Verificar se URL realmente mudou (evitar loop)
+      const oldUrl = e.currentTarget.src
+      if (newUrl === oldUrl || newUrl === PLACEHOLDER_IMAGE) {
+        console.error('[Preview] URL não mudou após refresh, usando placeholder')
+        e.currentTarget.src = PLACEHOLDER_IMAGE
+        return
+      }
+      
+      // Atualizar src da imagem
+      e.currentTarget.src = newUrl
+    } catch (error) {
+      console.error('[Preview] Erro ao fazer refresh:', error)
+      e.currentTarget.src = PLACEHOLDER_IMAGE
     }
   }
 
@@ -462,19 +532,16 @@ export default function Pontos() {
                               className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80"
                               onClick={async () => {
                                 const url = await resolvePhotoUrl(ponto.foto!.storage_path)
-                                handleImageClick(url)
+                                handleImageClick(url, ponto.foto!.storage_path)
                               }}
-                              onError={(e) => {
-                                console.error('[Preview] Erro ao carregar foto')
-                                e.currentTarget.src = PLACEHOLDER_IMAGE
-                              }}
+                              onError={(e) => handleImageError(e, ponto.foto!.storage_path)}
                             />
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={async () => {
                                 const url = await resolvePhotoUrl(ponto.foto!.storage_path)
-                                handleImageClick(url)
+                                handleImageClick(url, ponto.foto!.storage_path)
                               }}
                             >
                               <Eye className="h-4 w-4" />
@@ -527,17 +594,32 @@ export default function Pontos() {
                   alt="Foto do ponto"
                   className="max-w-full max-h-96 rounded-lg object-contain"
                   onError={(e) => {
-                    console.error('[Modal] Erro ao carregar foto')
-                    e.currentTarget.src = PLACEHOLDER_IMAGE
+                    if (selectedImagePath) {
+                      handleImageError(e, selectedImagePath)
+                    } else {
+                      console.error('[Modal] Erro ao carregar foto')
+                      e.currentTarget.src = PLACEHOLDER_IMAGE
+                    }
                   }}
                 />
               </div>
               <div className="flex justify-center space-x-2">
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     const timestamp = fmtDateForFilename(new Date())
                     const filename = `ponto_${timestamp}`
-                    downloadImage(selectedImage, filename)
+                    
+                    // Se tem path e bucket é privado, verificar expiração
+                    if (selectedImagePath && isFotosBucketPrivate()) {
+                      if (isPhotoUrlExpired(selectedImagePath)) {
+                        console.debug('[Download] URL expirada, fazendo refresh antes de baixar')
+                        const freshUrl = await refreshPhotoUrl(supabaseClient, selectedImagePath)
+                        await downloadImage(freshUrl, filename)
+                        return
+                      }
+                    }
+                    
+                    await downloadImage(selectedImage!, filename)
                   }}
                 >
                   <Download className="mr-2 h-4 w-4" />
@@ -551,3 +633,4 @@ export default function Pontos() {
     </div>
   )
 }
+
