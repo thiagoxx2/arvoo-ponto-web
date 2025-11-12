@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { normalizeStoragePath } from './pathSanity'
 
 // ============================================================================
 // Cache de signed URLs com expiração e coalescência de requests
@@ -95,6 +96,7 @@ function getFotosTTL(): number {
 
 /**
  * Gera signed URL com cache e coalescência de requisições
+ * Tenta variações normalizadas do path se o original falhar
  * @internal
  */
 async function signWithCache(supabase: SupabaseClient, path: string): Promise<string> {
@@ -103,66 +105,131 @@ async function signWithCache(supabase: SupabaseClient, path: string): Promise<st
   const now = nowSec()
   const MARGIN = 10 // Margem de segurança em segundos
   
-  // 1. Verificar cache (com margem de 10s antes de expirar)
-  const cached = signedCache.get(path)
-  if (cached && cached.exp > now + MARGIN) {
+  // Gerar candidatos (original + variações normalizadas)
+  const candidates = normalizeStoragePath(path)
+  
+  if (DIAG) {
+    console.debug('[photoUrl/normalize]', {
+      original: path.substring(0, 60),
+      candidates: candidates.map(c => c.substring(0, 60))
+    })
+  }
+  
+  // Tentar cada candidato em ordem
+  let lastError: unknown = null
+  
+  for (const candidate of candidates) {
+    // 1. Verificar cache do candidato (com margem de 10s antes de expirar)
+    const cached = signedCache.get(candidate)
+    if (cached && cached.exp > now + MARGIN) {
+      if (DIAG) {
+        console.debug('[photoUrl/cache hit]', {
+          candidate: candidate.substring(0, 50),
+          remaining: cached.exp - now
+        })
+      }
+      
+      // Hidratar cache da chave original, se diferente
+      if (candidate !== path) {
+        signedCache.set(path, cached)
+      }
+      
+      return cached.url
+    }
+    
+    // 2. Verificar se já há requisição em andamento (coalescência)
+    const pending = inflight.get(candidate)
+    if (pending) {
+      if (DIAG) {
+        console.debug('[photoUrl/inflight join]', { candidate: candidate.substring(0, 50) })
+      }
+      
+      const url = await pending
+      
+      // Hidratar cache da chave original
+      if (candidate !== path) {
+        const entry = signedCache.get(candidate)
+        if (entry) signedCache.set(path, entry)
+      }
+      
+      return url
+    }
+    
+    // 3. Tentar criar signed URL com este candidato
     if (DIAG) {
-      console.debug('[photoUrl/cache hit]', {
-        path: path.substring(0, 50),
-        remaining: cached.exp - now,
-        urlPrefix: cached.url.substring(0, 60) + '...'
+      console.debug('[photoUrl/try]', {
+        bucket,
+        candidate: candidate.substring(0, 60)
       })
     }
-    return cached.url
-  }
-  
-  // 2. Verificar se já há requisição em andamento (coalescência)
-  const pending = inflight.get(path)
-  if (pending) {
-    if (DIAG) {
-      console.debug('[photoUrl/inflight join]', { path: path.substring(0, 50) })
-    }
-    return await pending
-  }
-  
-  // 3. Criar nova requisição de assinatura
-  const signPromise = (async () => {
-    try {
+    
+    const signPromise = (async () => {
       const { data, error } = await supabase.storage
         .from(bucket)
-        .createSignedUrl(path, ttl)
+        .createSignedUrl(candidate, ttl)
       
       if (error || !data?.signedUrl) {
-        throw new Error(`Falha ao gerar URL assinada: ${error?.message || 'URL não disponível'}`)
+        throw error || new Error('Falha ao gerar URL assinada: URL não disponível')
       }
       
       const url = data.signedUrl
       const exp = now + ttl
       
-      // Atualizar cache
-      signedCache.set(path, { url, exp })
+      // Atualizar cache do candidato
+      signedCache.set(candidate, { url, exp })
+      
+      // Hidratar cache da chave original, se diferente
+      if (candidate !== path) {
+        signedCache.set(path, { url, exp })
+      }
       
       if (DIAG) {
         const urlPrefix = new URL(url).origin + new URL(url).pathname.substring(0, 40)
         console.debug('[photoUrl/cache set]', {
-          path: path.substring(0, 50),
+          candidate: candidate.substring(0, 50),
           ttl,
-          exp,
           urlPrefix: urlPrefix + '...'
         })
       }
       
       return url
-    } finally {
-      // Sempre remover de inflight ao terminar (sucesso ou erro)
-      inflight.delete(path)
+    })()
+    
+    // Salvar promise em inflight
+    inflight.set(candidate, signPromise)
+    
+    try {
+      const url = await signPromise
+      inflight.delete(candidate)
+      return url
+    } catch (error) {
+      inflight.delete(candidate)
+      lastError = error
+      
+      if (DIAG) {
+        console.warn('[photoUrl/not found]', {
+          bucket,
+          candidate: candidate.substring(0, 60),
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+      
+      // Tentar próximo candidato
+      continue
     }
-  })()
+  }
   
-  // Salvar promise em inflight antes de await
-  inflight.set(path, signPromise)
+  // Todos os candidatos falharam
+  if (DIAG) {
+    console.error('[photoUrl/fail all candidates]', {
+      bucket,
+      path: path.substring(0, 60),
+      candidates: candidates.map(c => c.substring(0, 60)),
+      lastError: lastError instanceof Error ? lastError.message : String(lastError)
+    })
+  }
   
-  return await signPromise
+  throw lastError || new Error('Falha ao gerar URL assinada: Object not found')
 }
 
 /**

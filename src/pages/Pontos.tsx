@@ -237,7 +237,14 @@ export default function Pontos() {
       
       return url
     } catch (error) {
-      console.error('[resolvePhotoUrl] Erro ao gerar URL:', error)
+      if (import.meta.env.VITE_DIAGNOSTICS === '1') {
+        console.warn('[resolvePhotoUrl] fallback placeholder', {
+          storagePath: storagePath.substring(0, 60),
+          error: error instanceof Error ? error.message : String(error)
+        })
+      } else {
+        console.error('[resolvePhotoUrl] Erro ao gerar URL:', error)
+      }
       return PLACEHOLDER_IMAGE
     }
   }
