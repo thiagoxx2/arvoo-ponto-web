@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { type PontoWithDetails } from '@/types/pontos'
 import { Search, Eye, Calendar, Clock, User, Building2, Download, AlertCircle } from 'lucide-react'
 import { sanitizeFilename, fmtDateForFilename, getExtensionFromMimeType } from '@/utils/fileUtils'
-import { getPublicPhotoUrl, getFotosBucket } from '@/utils/photoUrl'
+import { getPhotoUrl } from '@/utils/photoUrl'
 
 // SVG placeholder para imagens quebradas
 const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzZiNzI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkZvdG8gaW5kaXNwb27DrXZlbDwvdGV4dD48L3N2Zz4='
@@ -27,8 +27,8 @@ export default function Pontos() {
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(false)
   
-  // Bucket configurável via ENV
-  const BUCKET = getFotosBucket()
+  // Cache de URLs de fotos para evitar regenerar signed URLs
+  const [photoUrls, setPhotoUrls] = useState<Map<string, string>>(new Map())
 
   // Carregar dados uma vez ao acessar a página (apenas se autenticado)
   useEffect(() => {
@@ -152,6 +152,26 @@ export default function Pontos() {
     }
   }, [session])
 
+  // Pré-carregar URLs de fotos dos registros visíveis
+  useEffect(() => {
+    async function preloadPhotoUrls() {
+      const pontosComFoto = pontos.filter(p => p.foto?.storage_path)
+      
+      for (const ponto of pontosComFoto) {
+        const storagePath = ponto.foto!.storage_path
+        
+        // Só carregar se não estiver no cache
+        if (!photoUrls.has(storagePath)) {
+          await resolvePhotoUrl(storagePath)
+        }
+      }
+    }
+    
+    if (pontos.length > 0) {
+      preloadPhotoUrls()
+    }
+  }, [pontos]) // Recarregar quando pontos mudarem
+
   // Filtrar registros por termo de busca
   const registrosFiltrados = pontos.filter(ponto => {
     if (!searchTerm) return true
@@ -181,9 +201,25 @@ export default function Pontos() {
     setIsImageDialogOpen(true)
   }
 
-  // Função wrapper para gerar URL da foto usando util centralizado
-  const getPhotoUrl = (storagePath: string): string => {
-    return getPublicPhotoUrl(supabaseClient, BUCKET, storagePath)
+  // Função para resolver URL de foto (busca no cache ou gera nova)
+  const resolvePhotoUrl = async (storagePath: string): Promise<string> => {
+    // Verificar cache primeiro
+    if (photoUrls.has(storagePath)) {
+      return photoUrls.get(storagePath)!
+    }
+    
+    // Gerar nova URL (pública ou signed)
+    try {
+      const url = await getPhotoUrl(supabaseClient, storagePath)
+      
+      // Salvar no cache
+      setPhotoUrls(prev => new Map(prev).set(storagePath, url))
+      
+      return url
+    } catch (error) {
+      console.error('[resolvePhotoUrl] Erro ao gerar URL:', error)
+      return PLACEHOLDER_IMAGE
+    }
   }
 
   const downloadImage = async (imageUrl: string, rawName: string) => {
@@ -421,10 +457,13 @@ export default function Pontos() {
                         {ponto.foto?.storage_path ? (
                           <div className="flex items-center space-x-2">
                             <img
-                              src={getPhotoUrl(ponto.foto.storage_path)}
+                              src={photoUrls.get(ponto.foto.storage_path) || PLACEHOLDER_IMAGE}
                               alt="Foto do ponto"
                               className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80"
-                              onClick={() => handleImageClick(getPhotoUrl(ponto.foto!.storage_path))}
+                              onClick={async () => {
+                                const url = await resolvePhotoUrl(ponto.foto!.storage_path)
+                                handleImageClick(url)
+                              }}
                               onError={(e) => {
                                 console.error('[Preview] Erro ao carregar foto')
                                 e.currentTarget.src = PLACEHOLDER_IMAGE
@@ -433,7 +472,10 @@ export default function Pontos() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleImageClick(getPhotoUrl(ponto.foto!.storage_path))}
+                              onClick={async () => {
+                                const url = await resolvePhotoUrl(ponto.foto!.storage_path)
+                                handleImageClick(url)
+                              }}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -447,11 +489,12 @@ export default function Pontos() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => {
+                            onClick={async () => {
                               const timestamp = fmtDateForFilename(data)
                               const colaborador = ponto.colaborador.nome
                               const filename = `ponto_${colaborador}_${timestamp}`
-                              downloadImage(getPhotoUrl(ponto.foto!.storage_path), filename)
+                              const url = await resolvePhotoUrl(ponto.foto!.storage_path)
+                              downloadImage(url, filename)
                             }}
                           >
                             <Download className="h-4 w-4" />
