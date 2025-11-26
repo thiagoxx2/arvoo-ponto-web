@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PDFDownloadLink } from '@react-pdf/renderer';
 import { useColaboradores } from '../hooks/useColaboradores';
 import { useFolhaMensal } from '../hooks/useFolha';
 import { FolhaFilters } from '../components/folha/FolhaFilters';
 import { FolhaTabelaEmpresa } from '../components/folha/FolhaTabelaEmpresa';
 import { DiaDetalheModal } from '../components/folha/DiaDetalheModal';
 import { FotosDrawer } from '../components/folha/FotosDrawer';
+import FolhaPontoPdfDocument from '../components/folha/FolhaPontoPdfDocument';
+import { mockFolhaData } from '../mocks/folha/mockFolhaData';
 import { currentYearMonthLocal } from '../utils/time';
 import { calcPontoMensalMultiplos } from '../services/rpcFolha';
+import { Button } from '../components/ui/button';
 
 interface ColaboradorTotal {
   colaborador_id: string;
@@ -136,6 +140,25 @@ export default function Folha() {
           <p className="text-red-600">{errorColaborador}</p>
         </div>
       )}
+
+      {/* Seção de Exportação / PDF */}
+      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Exportação / PDF</h3>
+        <PDFDownloadLink
+          document={<FolhaPontoPdfDocument folha={mockFolhaData} />}
+          fileName={`folha-${mockFolhaData.periodo.mes}-${mockFolhaData.colaborador.nome}.pdf`}
+        >
+          {({ loading }) => (
+            <Button
+              variant="outline"
+              disabled={loading}
+              className="bg-white hover:bg-gray-50"
+            >
+              {loading ? "Gerando PDF..." : "Gerar PDF (Mock)"}
+            </Button>
+          )}
+        </PDFDownloadLink>
+      </div>
 
       {!colaboradorSelecionado ? (
         <FolhaTabelaEmpresa

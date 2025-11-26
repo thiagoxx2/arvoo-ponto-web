@@ -188,23 +188,37 @@ export default function Colaboradores() {
       }
 
       if (editingColaborador) {
-        // Atualizar colaborador
-        const updatePayload = {
-          nome: formData.nome,
-          pin_hash: formData.pin, // TODO: hash server-side
-          ativo: formData.ativo,
-          empresa_id: safeEmpresaId,
-          updated_at: new Date().toISOString()
-        }
-        
-        const { error } = await supabaseClient
+        // 1) UPDATE comum (sem pin_hash e sem updated_at)
+        const { error: updateError } = await supabaseClient
           .from('colaboradores')
-          .update(updatePayload)
+          .update({
+            nome: formData.nome,
+            ativo: formData.ativo,
+            empresa_id: safeEmpresaId
+          })
           .eq('id', editingColaborador.id)
 
-        if (error) {
-          console.error('[RLS A] Insert/Update blocked by policy')
-          throw error
+        if (updateError) {
+          console.error('[COLABORADORES/EDIT] Erro ao atualizar dados do colaborador:', updateError)
+          throw updateError
+        }
+
+        // 2) Se o admin informou um novo PIN, chamar a RPC de atualização de PIN
+        if (formData.pin.trim()) {
+          // reutilizar a validação de PIN: 4 a 6 dígitos numéricos
+          if (!/^\d{4,6}$/.test(formData.pin)) {
+            throw new Error('PIN deve ter 4 a 6 dígitos.')
+          }
+
+          const { error: pinError } = await supabaseClient.rpc('colaborador_update_pin', {
+            p_colaborador_id: editingColaborador.id,
+            p_new_pin: formData.pin
+          })
+
+          if (pinError) {
+            console.error('[COLABORADORES/EDIT] Erro ao atualizar PIN:', pinError)
+            throw pinError
+          }
         }
       } else {
         // Criar novo colaborador via RPC (hash no servidor com crypt())
@@ -374,12 +388,20 @@ export default function Colaboradores() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="pin">PIN</Label>
+                <Label htmlFor="pin">
+                  {editingColaborador ? 'Novo PIN (opcional)' : 'PIN'}
+                </Label>
                 <Input
                   id="pin"
+                  type="password"
                   value={formData.pin}
                   onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                  required
+                  required={!editingColaborador}
+                  placeholder={
+                    editingColaborador
+                      ? 'Deixe vazio para manter o PIN atual'
+                      : undefined
+                  }
                 />
               </div>
               <div className="space-y-2">
