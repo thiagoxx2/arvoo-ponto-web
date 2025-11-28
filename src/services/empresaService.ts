@@ -6,16 +6,18 @@ export class EmpresaService {
    * Listar todas as empresas
    */
   static async listar(): Promise<Empresa[]> {
+    console.log('📡 [EmpresaService] Fazendo SELECT no Supabase: empresas');
     const { data, error } = await supabaseClient
       .from('empresas')
       .select('id, nome, cnpj, cnpj_norm')
       .order('nome')
 
     if (error) {
-      console.error('Erro ao listar empresas:', error)
+      console.error('❌ [EmpresaService] Erro no SELECT:', error);
       throw new Error(`Falha ao carregar empresas: ${error.message}`)
     }
 
+    console.log('✅ [EmpresaService] SELECT retornou:', data?.length || 0, 'empresas');
     return data || []
   }
 

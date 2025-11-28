@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ColaboradorService } from '../services/colaboradorService'
 import { Colaborador } from '../types/pontos'
 
@@ -17,11 +17,13 @@ export function useColaboradores(empresaId?: string): UseColaboradoresReturn {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentEmpresaId, setCurrentEmpresaId] = useState<string | undefined>(empresaId)
+  const isLoadingRef = useRef(false)
 
   // Carregar colaboradores
   const loadColaboradores = useCallback(async (empresaId: string) => {
-    if (loading) return
+    if (isLoadingRef.current) return
 
+    isLoadingRef.current = true
     setLoading(true)
     setError(null)
 
@@ -34,9 +36,10 @@ export function useColaboradores(empresaId?: string): UseColaboradoresReturn {
       setError(errorMessage)
       console.error('Erro ao carregar colaboradores:', err)
     } finally {
+      isLoadingRef.current = false
       setLoading(false)
     }
-  }, [loading])
+  }, [])
 
   // Obter colaborador por ID
   const obterColaborador = useCallback(async (id: string): Promise<Colaborador | null> => {
@@ -70,7 +73,8 @@ export function useColaboradores(empresaId?: string): UseColaboradoresReturn {
     if (empresaId) {
       loadColaboradores(empresaId)
     }
-  }, [empresaId, loadColaboradores])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId])
 
   return {
     colaboradores,

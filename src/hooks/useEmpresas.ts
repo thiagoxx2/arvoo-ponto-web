@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { EmpresaService } from '../services/empresaService'
 import { Empresa } from '../types/pontos'
 
@@ -16,25 +16,35 @@ export function useEmpresas(): UseEmpresasReturn {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const isLoadingRef = useRef(false)
 
   // Carregar empresas
   const loadEmpresas = useCallback(async () => {
-    if (loading) return
+    if (isLoadingRef.current) {
+      console.log('⏸️ [useEmpresas] Já está carregando, ignorando chamada');
+      return;
+    }
 
+    console.log('🔄 [useEmpresas] Iniciando carregamento de empresas...');
+    isLoadingRef.current = true;
     setLoading(true)
     setError(null)
 
     try {
+      console.log('📡 [useEmpresas] Chamando EmpresaService.listar()...');
       const data = await EmpresaService.listar()
+      console.log('✅ [useEmpresas] Empresas carregadas:', data.length, data);
       setEmpresas(data)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido'
+      console.error('❌ [useEmpresas] Erro ao carregar empresas:', err)
       setError(errorMessage)
-      console.error('Erro ao carregar empresas:', err)
     } finally {
+      console.log('🏁 [useEmpresas] Finalizando carregamento');
+      isLoadingRef.current = false;
       setLoading(false)
     }
-  }, [loading])
+  }, [])
 
   // Obter empresa por ID
   const obterEmpresa = useCallback(async (id: string): Promise<Empresa | null> => {
@@ -61,10 +71,11 @@ export function useEmpresas(): UseEmpresasReturn {
     await loadEmpresas()
   }, [loadEmpresas])
 
-  // Carregar dados iniciais
+  // Carregar dados iniciais (apenas uma vez)
   useEffect(() => {
     loadEmpresas()
-  }, [loadEmpresas])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return {
     empresas,
