@@ -17,6 +17,9 @@ export type FolhaPontoPdfData = {
     cargo: string | null;
     regime_contratacao: string | null;
     jornada_contratual: string | null;
+    cpf: string | null;
+    data_nascimento: string | null;
+    horarios_pactuados: string | null;
   };
   periodo: {
     mes: string;        // "2025-11"
@@ -226,6 +229,16 @@ export default function FolhaPontoPdfDocument({
           <Text style={styles.colaboradorNome}>
             Colaborador: {folha.colaborador.nome}
           </Text>
+          {folha.colaborador.cpf && (
+            <Text style={styles.colaboradorInfo}>
+              CPF: {folha.colaborador.cpf}
+            </Text>
+          )}
+          {folha.colaborador.data_nascimento && (
+            <Text style={styles.colaboradorInfo}>
+              Data de Nascimento: {fmtDateBR(folha.colaborador.data_nascimento)}
+            </Text>
+          )}
           {folha.colaborador.cargo && (
             <Text style={styles.colaboradorInfo}>
               Cargo: {folha.colaborador.cargo}
@@ -236,9 +249,9 @@ export default function FolhaPontoPdfDocument({
               Regime de Contratação: {folha.colaborador.regime_contratacao}
             </Text>
           )}
-          {folha.colaborador.jornada_contratual && (
+          {(folha.colaborador.horarios_pactuados || folha.colaborador.jornada_contratual) && (
             <Text style={styles.colaboradorInfo}>
-              Jornada Contratual: {folha.colaborador.jornada_contratual}
+              Jornada / Horários Pactuados: {folha.colaborador.horarios_pactuados || folha.colaborador.jornada_contratual}
             </Text>
           )}
         </View>

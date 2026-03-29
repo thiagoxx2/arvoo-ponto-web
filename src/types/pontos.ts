@@ -18,6 +18,9 @@ export interface Colaborador {
   nome: string
   pin_hash: string
   ativo: boolean
+  cpf?: string
+  data_nascimento?: string
+  horarios_pactuados?: string
   created_at: string
 }
 

@@ -32,7 +32,10 @@ export default function Colaboradores() {
     nome: '',
     pin: '', // TODO: migrar para pin_hash via Edge Function (hash server-side)
     ativo: true,
-    empresa_id: ''
+    empresa_id: '',
+    cpf: '',
+    data_nascimento: '',
+    horarios_pactuados: ''
   })
 
   // Carregar dados uma vez ao acessar a página (apenas se autenticado)
@@ -194,7 +197,10 @@ export default function Colaboradores() {
           .update({
             nome: formData.nome,
             ativo: formData.ativo,
-            empresa_id: safeEmpresaId
+            empresa_id: safeEmpresaId,
+            cpf: formData.cpf || null,
+            data_nascimento: formData.data_nascimento || null,
+            horarios_pactuados: formData.horarios_pactuados || null
           })
           .eq('id', editingColaborador.id)
 
@@ -230,7 +236,10 @@ export default function Colaboradores() {
             p_nome: formData.nome,
             p_pin: formData.pin,
             p_ativo: formData.ativo,
-            p_empresa_id: safeEmpresaId
+            p_empresa_id: safeEmpresaId,
+            p_cpf: formData.cpf || null,
+            p_data_nascimento: formData.data_nascimento || null,
+            p_horarios_pactuados: formData.horarios_pactuados || null
           })
 
         if (error) {
@@ -262,7 +271,10 @@ export default function Colaboradores() {
       nome: colaborador.nome,
       pin: '', // nunca expor hash; usuário só altera se digitar novo PIN
       ativo: colaborador.ativo,
-      empresa_id: colaborador.empresa_id
+      empresa_id: colaborador.empresa_id,
+      cpf: colaborador.cpf || '',
+      data_nascimento: colaborador.data_nascimento || '',
+      horarios_pactuados: colaborador.horarios_pactuados || ''
     })
     setIsDialogOpen(true)
   }
@@ -293,7 +305,10 @@ export default function Colaboradores() {
       nome: '',
       pin: '',
       ativo: true,
-      empresa_id: ''
+      empresa_id: '',
+      cpf: '',
+      data_nascimento: '',
+      horarios_pactuados: ''
     })
     setEditingColaborador(null)
   }
@@ -379,12 +394,41 @@ export default function Colaboradores() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="nome">Nome</Label>
+                <Label htmlFor="nome">Nome Completo</Label>
                 <Input
                   id="nome"
                   value={formData.nome}
                   onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
                   required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="cpf">CPF</Label>
+                  <Input
+                    id="cpf"
+                    placeholder="000.000.000-00"
+                    value={formData.cpf}
+                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="data_nascimento">Data Nasc.</Label>
+                  <Input
+                    id="data_nascimento"
+                    type="date"
+                    value={formData.data_nascimento}
+                    onChange={(e) => setFormData({ ...formData, data_nascimento: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="horarios_pactuados">Horários Pactuados</Label>
+                <Input
+                  id="horarios_pactuados"
+                  placeholder="Ex: 08:00 às 18:00"
+                  value={formData.horarios_pactuados}
+                  onChange={(e) => setFormData({ ...formData, horarios_pactuados: e.target.value })}
                 />
               </div>
               <div className="space-y-2">

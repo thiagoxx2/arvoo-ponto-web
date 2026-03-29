@@ -17,3 +17,6 @@ coverage/
 .vscode/
 .idea/
 .DS_Store
+
+# files
+migration-campos-colaborador.sql

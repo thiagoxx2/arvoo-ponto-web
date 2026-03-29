@@ -83,7 +83,16 @@ export default function ColaboradorFolha() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">{colaborador.nome}</h1>
-              <p className="text-gray-600">Folha de Ponto Individual</p>
+              <div className="text-sm text-gray-500 mt-1 flex flex-col sm:flex-row sm:gap-4 gap-1">
+                {colaborador.cpf && <span><strong>CPF:</strong> {colaborador.cpf}</span>}
+                {colaborador.data_nascimento && (
+                  <span>
+                    <strong>Nascimento:</strong>{' '}
+                    {new Date(colaborador.data_nascimento + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                  </span>
+                )}
+                {colaborador.horarios_pactuados && <span><strong>Horários:</strong> {colaborador.horarios_pactuados}</span>}
+              </div>
             </div>
           </div>
           
