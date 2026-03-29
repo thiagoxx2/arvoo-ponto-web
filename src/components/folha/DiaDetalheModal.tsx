@@ -68,13 +68,13 @@ export function DiaDetalheModal({
                   <p className="text-sm text-gray-600">Status</p>
                   <span className={`px-2 py-1 rounded text-sm ${
                     data.status_dia === 'OK' ? 'bg-green-100 text-green-800' :
-                    data.status_dia === 'PAR_INCOMPLETO' ? 'bg-yellow-100 text-yellow-800' :
+                    (data.status_dia === 'INCOMPLETO' || data.status_dia === 'PAR_INCOMPLETO') ? 'bg-yellow-100 text-yellow-800' :
                     data.status_dia === 'SEM_REGISTRO' ? 'bg-gray-100 text-gray-800' :
                     'bg-red-100 text-red-800'
                   }`}>
                     {data.status_dia === 'OK' ? 'OK' :
-                     data.status_dia === 'PAR_INCOMPLETO' ? 'Par Incompleto' :
-                     data.status_dia === 'SEM_REGISTRO' ? 'Sem Registro' :
+                     (data.status_dia === 'INCOMPLETO' || data.status_dia === 'PAR_INCOMPLETO') ? 'INCOMPLETO' :
+                     data.status_dia === 'SEM_REGISTRO' ? 'SEM REGISTRO' :
                      data.status_dia}
                   </span>
                 </div>

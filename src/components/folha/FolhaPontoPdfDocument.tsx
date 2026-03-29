@@ -270,9 +270,17 @@ export default function FolhaPontoPdfDocument({
           </View>
           {folha.diario.map((dia, idx) => {
             const batidasTexto = fmtBatidas(dia.batidas);
-            const batidasComObs = dia.observacao
-              ? `${batidasTexto} (${dia.observacao})`
-              : batidasTexto;
+            
+            let batidasComObs = batidasTexto;
+            
+            // Verificação robusta caso o texto venha direto da batida ou do observacao
+            if (dia.observacao?.includes('SEM_REGISTRO') || batidasTexto.includes('SEM_REGISTRO') || batidasTexto.includes('SEM REGISTRO')) {
+              batidasComObs = 'SEM REGISTRO';
+            } else if (dia.observacao === 'INCOMPLETO' || dia.observacao === 'PAR_INCOMPLETO') {
+              batidasComObs = `${batidasTexto} (INCOMPLETO)`;
+            } else if (dia.observacao) {
+              batidasComObs = `${batidasTexto} (${dia.observacao})`;
+            }
             return (
               <View
                 key={dia.data}

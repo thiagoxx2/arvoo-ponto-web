@@ -122,13 +122,13 @@ export function FolhaTabelaEmpresa({
                 <td className="p-3">
                   <span className={`px-2 py-1 rounded text-sm ${
                     dia.status_dia === 'OK' ? 'bg-green-100 text-green-800' :
-                    dia.status_dia === 'PAR_INCOMPLETO' ? 'bg-yellow-100 text-yellow-800' :
+                    (dia.status_dia === 'INCOMPLETO' || dia.status_dia === 'PAR_INCOMPLETO') ? 'bg-yellow-100 text-yellow-800' :
                     dia.status_dia === 'SEM_REGISTRO' ? 'bg-gray-100 text-gray-800' :
                     'bg-red-100 text-red-800'
                   }`}>
                     {dia.status_dia === 'OK' ? 'OK' :
-                     dia.status_dia === 'PAR_INCOMPLETO' ? 'Par Incompleto' :
-                     dia.status_dia === 'SEM_REGISTRO' ? 'Sem Registro' :
+                     (dia.status_dia === 'INCOMPLETO' || dia.status_dia === 'PAR_INCOMPLETO') ? 'INCOMPLETO' :
+                     dia.status_dia === 'SEM_REGISTRO' ? 'SEM REGISTRO' :
                      dia.status_dia}
                   </span>
                 </td>
