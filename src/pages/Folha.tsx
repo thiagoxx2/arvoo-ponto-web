@@ -414,9 +414,11 @@ export default function Folha() {
                 <TableBody>
                   {folhaData.diario.map((dia) => {
                     const batidasTexto = fmtBatidas(dia.batidas);
-                    const batidasComObs = dia.observacao
-                      ? `${batidasTexto} (${dia.observacao})`
-                      : batidasTexto;
+                    const batidasComObs = dia.observacao && (dia.observacao.includes("SEM_REGISTRO") || dia.observacao.includes("SEM REGISTRO"))
+                      ? ""
+                      : dia.observacao
+                        ? `${batidasTexto} (${dia.observacao})`
+                        : batidasTexto;
                     
                     return (
                       <TableRow key={dia.data}>
@@ -424,14 +426,14 @@ export default function Folha() {
                           {String(dia.dia).padStart(2, "0")}
                         </TableCell>
                         <TableCell>{fmtDateBR(dia.data)}</TableCell>
-                        <TableCell>{batidasComObs}</TableCell>
+                        <TableCell>{batidasComObs === "-" ? "" : batidasComObs}</TableCell>
                         <TableCell>{dia.total_trabalhado}</TableCell>
                         <TableCell>{dia.horas_extras}</TableCell>
                         <TableCell>{dia.atrasos}</TableCell>
                         <TableCell>{dia.faltas}</TableCell>
                         <TableCell>{dia.banco_horas_dia}</TableCell>
                         <TableCell>
-                          {dia.observacao && (
+                          {dia.observacao && !dia.observacao.includes("SEM_REGISTRO") && !dia.observacao.includes("SEM REGISTRO") && (
                             <span
                               className={`px-2 py-1 rounded text-xs ${
                                 dia.observacao === "PAR_INCOMPLETO"

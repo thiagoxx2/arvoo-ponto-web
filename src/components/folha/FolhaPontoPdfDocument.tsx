@@ -275,7 +275,7 @@ export default function FolhaPontoPdfDocument({
             
             // Verificação robusta caso o texto venha direto da batida ou do observacao
             if (dia.observacao?.includes('SEM_REGISTRO') || batidasTexto.includes('SEM_REGISTRO') || batidasTexto.includes('SEM REGISTRO')) {
-              batidasComObs = 'SEM REGISTRO';
+              batidasComObs = '';
             } else if (dia.observacao === 'INCOMPLETO' || dia.observacao === 'PAR_INCOMPLETO') {
               batidasComObs = `${batidasTexto} (INCOMPLETO)`;
             } else if (dia.observacao) {

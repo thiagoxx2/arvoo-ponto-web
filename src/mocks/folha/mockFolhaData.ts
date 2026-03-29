@@ -10,6 +10,9 @@ export const mockFolhaData: FolhaPontoPdfData = {
     cargo: "Atendente",
     regime_contratacao: "CLT",
     jornada_contratual: "44h semanais",
+    cpf: null,
+    data_nascimento: null,
+    horarios_pactuados: null,
   },
   periodo: {
     mes: "2025-11",
