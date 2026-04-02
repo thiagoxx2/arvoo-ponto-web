@@ -17,10 +17,36 @@ export interface Colaborador {
   empresa_id: string
   nome: string
   pin_hash: string
-  ativo: boolean
+  status: string // 'ativo', 'afastado', 'desligado', 'inativo'
+  ativo: boolean // legado, manter por compatibilidade
+  
+  // Documentação e Identificação
   cpf?: string
+  matricula?: string
   data_nascimento?: string
+  data_admissao?: string
+  
+  // Contato
+  email?: string
+  telefone?: string
+  
+  // Estrutura
+  cargo?: string
+  unidade?: string
+  setor?: string
+  gestor_responsavel?: string
+  tipo_vinculo?: string
+  
+  // Ponto e Acesso
   horarios_pactuados?: string
+  jornada_contratual?: string
+  possui_acesso_app?: boolean
+  senha_hash?: string
+  pin?: string // PIN para quiosque, opcional na exibição
+  
+  // Diversos
+  foto_url?: string
+  observacoes?: string
   created_at: string
 }
 
