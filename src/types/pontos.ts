@@ -53,9 +53,35 @@ export interface Colaborador {
 // Tabela: empresas
 export interface Empresa {
   id: string
-  nome: string
+  nome: string // Nome original para compatibilidade
+  razao_social?: string
+  nome_fantasia?: string
   cnpj: string
   cnpj_norm?: string
+  inscricao_estadual?: string
+  inscricao_municipal?: string
+  email_principal?: string
+  telefone_principal?: string
+  status: string // 'ativa' | 'inativa'
+  
+  // Endereço
+  cep?: string
+  logradouro?: string
+  numero?: string
+  complemento?: string
+  bairro?: string
+  cidade?: string
+  estado?: string
+  
+  // Responsável
+  responsavel_nome?: string
+  responsavel_email?: string
+  
+  // Contrato
+  plano_contratado?: string
+  data_inicio_contrato?: string
+  observacoes_internas?: string
+  
   created_at?: string
   updated_at?: string
 }

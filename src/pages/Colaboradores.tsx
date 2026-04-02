@@ -27,6 +27,8 @@ export default function Colaboradores() {
   const [editingColaborador, setEditingColaborador] = useState<Colaborador | null>(null)
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [unidades, setUnidades] = useState<any[]>([])
+  const [loadingUnidades, setLoadingUnidades] = useState(false)
   const [formData, setFormData] = useState({
     // Dados Pessoais
     nome: '',
@@ -186,6 +188,31 @@ export default function Colaboradores() {
       supabaseClient.removeChannel(channel)
     }
   }, [session])
+
+  // Carregar unidades quando a empresa mudar
+  useEffect(() => {
+    async function loadUnidades() {
+      if (!formData.empresa_id) {
+        setUnidades([])
+        return
+      }
+      try {
+        setLoadingUnidades(true)
+        const { data, error } = await supabaseClient
+          .from('unidades')
+          .select('*')
+          .eq('empresa_id', formData.empresa_id)
+          .order('nome')
+        if (error) throw error
+        setUnidades(data || [])
+      } catch (err) {
+        console.error('Erro ao carregar unidades:', err)
+      } finally {
+        setLoadingUnidades(false)
+      }
+    }
+    loadUnidades()
+  }, [formData.empresa_id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -571,13 +598,25 @@ export default function Colaboradores() {
                       onChange={(e) => setFormData({ ...formData, matricula: e.target.value })}
                     />
                   </div>
-                  <div className="space-y-2">
+                   <div className="space-y-2">
                     <Label htmlFor="unidade">Unidade</Label>
-                    <Input
+                    <select
                       id="unidade"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       value={formData.unidade}
                       onChange={(e) => setFormData({ ...formData, unidade: e.target.value })}
-                    />
+                      disabled={loadingUnidades || !formData.empresa_id}
+                    >
+                      <option value="">Selecione...</option>
+                      {unidades.map((u) => (
+                        <option key={u.id} value={u.nome}>
+                          {u.nome}
+                        </option>
+                      ))}
+                      {!loadingUnidades && unidades.length === 0 && formData.empresa_id && (
+                        <option value="" disabled>Nenhuma unidade cadastrada</option>
+                      )}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="setor">Setor</Label>
