@@ -9,7 +9,7 @@ export class EmpresaService {
     console.log('📡 [EmpresaService] Fazendo SELECT no Supabase: empresas');
     const { data, error } = await supabaseClient
       .from('empresas')
-      .select('id, nome, cnpj, cnpj_norm')
+      .select('id, nome, cnpj, cnpj_norm, status')
       .order('nome')
 
     if (error) {
@@ -27,7 +27,7 @@ export class EmpresaService {
   static async obterPorId(id: string): Promise<Empresa | null> {
     const { data, error } = await supabaseClient
       .from('empresas')
-      .select('id, nome, cnpj, cnpj_norm')
+      .select('id, nome, cnpj, cnpj_norm, status')
       .eq('id', id)
       .single()
 
@@ -46,7 +46,7 @@ export class EmpresaService {
   static async buscarPorCnpj(cnpj: string): Promise<Empresa | null> {
     const { data, error } = await supabaseClient
       .from('empresas')
-      .select('id, nome, cnpj, cnpj_norm')
+      .select('id, nome, cnpj, cnpj_norm, status')
       .eq('cnpj', cnpj)
       .single()
 
