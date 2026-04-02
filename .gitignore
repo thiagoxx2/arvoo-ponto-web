@@ -21,3 +21,5 @@ coverage/
 # files
 migration-campos-colaborador.sql
 migration-sequencial-pontos.sql
+
+DOCUMENTACAO.md
