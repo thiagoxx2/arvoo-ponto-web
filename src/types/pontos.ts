@@ -44,6 +44,13 @@ export interface Colaborador {
   senha_hash?: string
   pin?: string // PIN para quiosque, opcional na exibição
   
+  // Escala de Trabalho
+  tipo_escala?: string        // 'semanal_fixa' | 'ciclica' | 'livre'
+  dias_trabalho?: number[]    // [0-6] → 0=Dom, 1=Seg, ..., 6=Sab
+  escala_dias_trabalho?: number
+  escala_dias_folga?: number
+  escala_data_inicio?: string
+  
   // Diversos
   foto_url?: string
   observacoes?: string

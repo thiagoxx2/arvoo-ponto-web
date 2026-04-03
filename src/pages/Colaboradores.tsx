@@ -58,11 +58,18 @@ export default function Colaboradores() {
     tipo_vinculo: '',
     
     // Ponto e Acesso
-    pin: '', // PIN para quiosque
-    senha_inicial: '', // Senha de acesso inicial (opcional)
+    pin: '',
+    senha_inicial: '',
     possui_acesso_app: false,
     horarios_pactuados: '',
     status: 'ativo',
+    
+    // Escala de Trabalho
+    tipo_escala: 'semanal_fixa' as string,
+    dias_trabalho: [1, 2, 3, 4, 5] as number[],
+    escala_dias_trabalho: '' as string,
+    escala_dias_folga: '' as string,
+    escala_data_inicio: '',
     
     // Outros
     observacoes: '',
@@ -266,6 +273,11 @@ export default function Colaboradores() {
           horarios_pactuados: formData.horarios_pactuados || null,
           possui_acesso_app: formData.possui_acesso_app,
           observacoes: formData.observacoes || null,
+          tipo_escala: formData.tipo_escala,
+          dias_trabalho: formData.tipo_escala === 'semanal_fixa' ? formData.dias_trabalho : [1,2,3,4,5],
+          escala_dias_trabalho: formData.tipo_escala === 'ciclica' ? parseInt(formData.escala_dias_trabalho as string) || null : null,
+          escala_dias_folga: formData.tipo_escala === 'ciclica' ? parseInt(formData.escala_dias_folga as string) || null : null,
+          escala_data_inicio: formData.tipo_escala === 'ciclica' ? formData.escala_data_inicio || null : null,
           updated_at: new Date().toISOString()
         }
 
@@ -318,6 +330,20 @@ export default function Colaboradores() {
 
         if (rpcError) throw rpcError
         console.log('✅ Colaborador criado com ID:', newId)
+
+        // Atualizar campos de escala (RPC não conhece esses campos novos)
+        if (newId) {
+          await supabaseClient
+            .from('colaboradores')
+            .update({
+              tipo_escala: formData.tipo_escala,
+              dias_trabalho: formData.tipo_escala === 'semanal_fixa' ? formData.dias_trabalho : [1,2,3,4,5],
+              escala_dias_trabalho: formData.tipo_escala === 'ciclica' ? parseInt(formData.escala_dias_trabalho as string) || null : null,
+              escala_dias_folga: formData.tipo_escala === 'ciclica' ? parseInt(formData.escala_dias_folga as string) || null : null,
+              escala_data_inicio: formData.tipo_escala === 'ciclica' ? formData.escala_data_inicio || null : null,
+            })
+            .eq('id', newId)
+        }
       }
 
       console.log('✅ Colaborador salvo com sucesso.')
@@ -337,7 +363,7 @@ export default function Colaboradores() {
     }
   }
 
-  const handleEdit = (colaborador: Colaborador) => {
+  const handleEdit = (colaborador: any) => {
     setEditingColaborador(colaborador)
     setFormData({
       nome: colaborador.nome,
@@ -358,6 +384,11 @@ export default function Colaboradores() {
       possui_acesso_app: colaborador.possui_acesso_app || false,
       horarios_pactuados: colaborador.horarios_pactuados || '',
       status: colaborador.status || 'ativo',
+      tipo_escala: colaborador.tipo_escala || 'semanal_fixa',
+      dias_trabalho: colaborador.dias_trabalho || [1, 2, 3, 4, 5],
+      escala_dias_trabalho: colaborador.escala_dias_trabalho?.toString() || '',
+      escala_dias_folga: colaborador.escala_dias_folga?.toString() || '',
+      escala_data_inicio: colaborador.escala_data_inicio || '',
       observacoes: colaborador.observacoes || '',
       foto_url: colaborador.foto_url || ''
     })
@@ -405,6 +436,11 @@ export default function Colaboradores() {
       possui_acesso_app: false,
       horarios_pactuados: '',
       status: 'ativo',
+      tipo_escala: 'semanal_fixa',
+      dias_trabalho: [1, 2, 3, 4, 5],
+      escala_dias_trabalho: '',
+      escala_dias_folga: '',
+      escala_data_inicio: '',
       observacoes: '',
       foto_url: ''
     })
@@ -728,7 +764,116 @@ export default function Colaboradores() {
                 </div>
               </div>
 
-              {/* Seção 4: Outros */}
+              {/* Seção 4: Escala de Trabalho */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-1">Escala de Trabalho</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <RequiredLabel htmlFor="tipo_escala">Tipo de Escala</RequiredLabel>
+                    <select
+                      id="tipo_escala"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={formData.tipo_escala}
+                      onChange={(e) => setFormData({ ...formData, tipo_escala: e.target.value })}
+                    >
+                      <option value="semanal_fixa">Semanal Fixa</option>
+                      <option value="ciclica">Cíclica (ex: 12x36, 5x1)</option>
+                      <option value="livre">Livre (sem controle)</option>
+                    </select>
+                  </div>
+
+                  {/* Dias da semana para escala semanal fixa */}
+                  {formData.tipo_escala === 'semanal_fixa' && (
+                    <div className="space-y-2">
+                      <Label>Dias de Trabalho</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { value: 0, label: 'Dom' },
+                          { value: 1, label: 'Seg' },
+                          { value: 2, label: 'Ter' },
+                          { value: 3, label: 'Qua' },
+                          { value: 4, label: 'Qui' },
+                          { value: 5, label: 'Sex' },
+                          { value: 6, label: 'Sáb' },
+                        ].map((dia) => {
+                          const isSelected = formData.dias_trabalho.includes(dia.value)
+                          return (
+                            <button
+                              key={dia.value}
+                              type="button"
+                              className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                                isSelected
+                                  ? 'bg-primary text-primary-foreground border-primary'
+                                  : 'bg-background text-muted-foreground border-input hover:bg-muted'
+                              }`}
+                              onClick={() => {
+                                const newDias = isSelected
+                                  ? formData.dias_trabalho.filter((d) => d !== dia.value)
+                                  : [...formData.dias_trabalho, dia.value].sort()
+                                setFormData({ ...formData, dias_trabalho: newDias })
+                              }}
+                            >
+                              {dia.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Clique nos dias em que o colaborador trabalha. Dias não selecionados são folga.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Campos para escala cíclica */}
+                  {formData.tipo_escala === 'ciclica' && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <RequiredLabel htmlFor="escala_dias_trabalho">Dias de Trabalho</RequiredLabel>
+                        <Input
+                          id="escala_dias_trabalho"
+                          type="number"
+                          min="1"
+                          placeholder="Ex: 1"
+                          value={formData.escala_dias_trabalho}
+                          onChange={(e) => setFormData({ ...formData, escala_dias_trabalho: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <RequiredLabel htmlFor="escala_dias_folga">Dias de Folga</RequiredLabel>
+                        <Input
+                          id="escala_dias_folga"
+                          type="number"
+                          min="1"
+                          placeholder="Ex: 1"
+                          value={formData.escala_dias_folga}
+                          onChange={(e) => setFormData({ ...formData, escala_dias_folga: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <RequiredLabel htmlFor="escala_data_inicio">Data Base Início</RequiredLabel>
+                        <Input
+                          id="escala_data_inicio"
+                          type="date"
+                          value={formData.escala_data_inicio}
+                          onChange={(e) => setFormData({ ...formData, escala_data_inicio: e.target.value })}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground md:col-span-3">
+                        Informe o ciclo de trabalho (ex: 1 dia trabalho + 1 dia folga = 12x36).
+                        A data base é o primeiro dia de trabalho de referência.
+                      </p>
+                    </div>
+                  )}
+
+                  {formData.tipo_escala === 'livre' && (
+                    <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                      ℹ️ Colaboradores com escala livre não geram pendência de registro no dashboard.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Seção 5: Outros */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold border-b pb-1">Observações</h3>
                 <textarea
