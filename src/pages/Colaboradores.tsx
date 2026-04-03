@@ -10,6 +10,16 @@ import { supabaseClient } from '@/lib/supabaseClient'
 import { useAuth } from '@/contexts/AuthContext'
 import { type Colaborador, type Empresa } from '@/types/pontos'
 import { Plus, Search, Edit, Trash2, Building2, AlertCircle } from 'lucide-react'
+import { maskCPF, maskPhone, maskPIN } from '@/utils/masks'
+
+/** Label com asterisco vermelho para campos obrigatórios */
+function RequiredLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <Label htmlFor={htmlFor}>
+      {children} <span className="text-red-500">*</span>
+    </Label>
+  )
+}
 
 // Tipo para colaborador com empresa
 type ColaboradorWithEmpresa = Colaborador & {
@@ -281,66 +291,33 @@ export default function Colaboradores() {
 
         if (updateError) throw updateError
       } else {
-        // INSERT direto na tabela (em vez de RPC colaborador_create para maior flexibilidade de campos)
-        const payload: any = {
-          nome: formData.nome,
-          status: formData.status,
-          empresa_id: safeEmpresaId,
-          cpf: formData.cpf || null,
-          data_nascimento: formData.data_nascimento || null,
-          email: formData.email || null,
-          telefone: formData.telefone || null,
-          matricula: formData.matricula || null,
-          cargo: formData.cargo || null,
-          unidade: formData.unidade || null,
-          setor: formData.setor || null,
-          gestor_responsavel: formData.gestor_responsavel || null,
-          data_admissao: formData.data_admissao || null,
-          tipo_vinculo: formData.tipo_vinculo || null,
-          horarios_pactuados: formData.horarios_pactuados || null,
-          possui_acesso_app: formData.possui_acesso_app,
-          observacoes: formData.observacoes || null,
-          // Senha inicial (hash seria ideal aqui)
-          senha_hash: formData.senha_inicial || null
-        }
+        // Criar colaborador via RPC (hash do PIN e senha feito no servidor)
+        const { data: newId, error: rpcError } = await supabaseClient.rpc('colaborador_create', {
+          p_nome: formData.nome,
+          p_pin: formData.pin,
+          p_ativo: formData.status === 'ativo',
+          p_empresa_id: safeEmpresaId,
+          p_cpf: formData.cpf || null,
+          p_data_nascimento: formData.data_nascimento || null,
+          p_horarios_pactuados: formData.horarios_pactuados || null,
+          p_matricula: formData.matricula || null,
+          p_email: formData.email || null,
+          p_telefone: formData.telefone || null,
+          p_cargo: formData.cargo || null,
+          p_setor: formData.setor || null,
+          p_unidade: formData.unidade || null,
+          p_jornada_contratual: formData.horarios_pactuados || null,
+          p_gestor_responsavel: formData.gestor_responsavel || null,
+          p_data_admissao: formData.data_admissao || null,
+          p_status: formData.status || 'ativo',
+          p_tipo_vinculo: formData.tipo_vinculo || null,
+          p_senha_hash: formData.senha_inicial || null,
+          p_possui_acesso_app: formData.possui_acesso_app,
+          p_observacoes: formData.observacoes || null
+        })
 
-        // Para o PIN no INSERT, como a tabela exige pin (ou pin_hash), 
-        // se a RPC for a única forma de criar com hash, temos um dilema.
-        // Vou tentar um insert direto. Se falhar por falta de hash, avisamos.
-        // Mas assumirei que podemos inserir 'pin' se a coluna existir ou recriar a lógica.
-        
-        // Tentativa de insert direto
-        const { error: insertError } = await supabaseClient
-          .from('colaboradores')
-          .insert([payload])
-
-        if (insertError) {
-          // Se falhar, pode ser porque o banco exige a RPC para o PIN hash.
-          // Nesse caso, o fallback seria a RPC se ela ainda existir.
-          console.error('Erro no insert direto, tentando via RPC fallback para compatibilidade de PIN:', insertError)
-          
-          const { error: rpcError } = await supabaseClient.rpc('colaborador_create', {
-            p_nome: formData.nome,
-            p_pin: formData.pin,
-            p_ativo: formData.status === 'ativo',
-            p_empresa_id: safeEmpresaId,
-            p_cpf: formData.cpf || null,
-            p_data_nascimento: formData.data_nascimento || null,
-            p_horarios_pactuados: formData.horarios_pactuados || null
-          })
-          if (rpcError) throw rpcError
-          
-          // Se salvou via RPC, então atualizamos os novos campos via UPDATE logo em seguida (patch)
-          const { data: newColab } = await supabaseClient
-            .from('colaboradores')
-            .select('id')
-            .eq('cpf', formData.cpf)
-            .single()
-            
-          if (newColab) {
-            await supabaseClient.from('colaboradores').update(payload).eq('id', newColab.id)
-          }
-        }
+        if (rpcError) throw rpcError
+        console.log('✅ Colaborador criado com ID:', newId)
       }
 
       console.log('✅ Colaborador salvo com sucesso.')
@@ -512,6 +489,9 @@ export default function Colaboradores() {
                   : 'Adicione um novo colaborador com todos os dados necessários.'
                 }
               </DialogDescription>
+              <p className="text-xs text-muted-foreground mt-1">
+                Campos marcados com <span className="text-red-500">*</span> são obrigatórios.
+              </p>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Seção 1: Dados Pessoais */}
@@ -519,11 +499,12 @@ export default function Colaboradores() {
                 <h3 className="text-lg font-semibold border-b pb-1">Dados Pessoais</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="nome">Nome Completo</Label>
+                    <RequiredLabel htmlFor="nome">Nome Completo</RequiredLabel>
                     <Input
                       id="nome"
                       value={formData.nome}
                       onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                      placeholder="Nome completo do colaborador"
                       required
                     />
                   </div>
@@ -533,7 +514,8 @@ export default function Colaboradores() {
                       id="cpf"
                       placeholder="000.000.000-00"
                       value={formData.cpf}
-                      onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, cpf: maskCPF(e.target.value) })}
+                      maxLength={14}
                     />
                   </div>
                   <div className="space-y-2">
@@ -559,9 +541,10 @@ export default function Colaboradores() {
                     <Label htmlFor="telefone">Telefone</Label>
                     <Input
                       id="telefone"
-                      placeholder="(00) 00000-0000"
+                      placeholder="(00) 0 0000-0000"
                       value={formData.telefone}
-                      onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, telefone: maskPhone(e.target.value) })}
+                      maxLength={16}
                     />
                   </div>
                 </div>
@@ -572,7 +555,7 @@ export default function Colaboradores() {
                 <h3 className="text-lg font-semibold border-b pb-1">Dados Corporativos</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="empresa">Empresa Vinculada</Label>
+                    <RequiredLabel htmlFor="empresa">Empresa Vinculada</RequiredLabel>
                     <select
                       id="empresa"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -675,7 +658,7 @@ export default function Colaboradores() {
                 <h3 className="text-lg font-semibold border-b pb-1">Ponto e Acesso</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
+                    <RequiredLabel htmlFor="status">Status</RequiredLabel>
                     <select
                       id="status"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -698,13 +681,18 @@ export default function Colaboradores() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="pin">PIN de Identificação (Quiosque)</Label>
+                    {!editingColaborador ? (
+                      <RequiredLabel htmlFor="pin">PIN de Identificação (Quiosque)</RequiredLabel>
+                    ) : (
+                      <Label htmlFor="pin">PIN de Identificação (Quiosque)</Label>
+                    )}
                     <Input
                       id="pin"
                       type="password"
                       placeholder={editingColaborador ? "Vazio mantém o atual" : "4 a 6 dígitos"}
                       value={formData.pin}
-                      onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, pin: maskPIN(e.target.value) })}
+                      maxLength={6}
                       required={!editingColaborador}
                     />
                   </div>
@@ -818,9 +806,9 @@ export default function Colaboradores() {
                     </TableCell>
                     <TableCell>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        colaborador.status === 'ativo' 
+                        colaborador.status?.toLowerCase() === 'ativo' 
                           ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                          : colaborador.status === 'afastado'
+                          : colaborador.status?.toLowerCase() === 'afastado'
                           ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
                           : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
                       }`}>

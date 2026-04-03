@@ -9,6 +9,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { supabaseClient } from '@/lib/supabaseClient'
 import { type Empresa } from '@/types/pontos'
 import { Plus, Search, Edit, Trash2, Building2, AlertTriangle, MapPin } from 'lucide-react'
+import { maskCNPJ, maskPhone, maskCEP } from '@/utils/masks'
+
+/** Label com asterisco vermelho para campos obrigatórios */
+function RequiredLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <Label htmlFor={htmlFor}>
+      {children} <span className="text-red-500">*</span>
+    </Label>
+  )
+}
 
 export default function Empresas() {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
@@ -49,6 +59,13 @@ export default function Empresas() {
     data_inicio_contrato: '',
     observacoes_internas: ''
   })
+
+  /** Lista de UFs brasileiros para o select */
+  const UF_OPTIONS = [
+    'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
+    'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC',
+    'SP','SE','TO'
+  ]
 
   useEffect(() => {
     loadEmpresas()
@@ -190,6 +207,11 @@ export default function Empresas() {
            e.cnpj.includes(termo.replace(/\D/g, ''))
   })
 
+  /** Helper: atualiza formData com máscara */
+  const setMasked = (field: string, value: string, maskFn: (v: string) => string) => {
+    setFormData(prev => ({ ...prev, [field]: maskFn(value) }))
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -229,58 +251,243 @@ export default function Empresas() {
               <DialogDescription>
                 {editingEmpresa ? 'Atualize as informações completas da empresa.' : 'Adicione uma nova empresa com detalhes fiscais e de endereço.'}
               </DialogDescription>
+              <p className="text-xs text-muted-foreground mt-1">
+                Campos marcados com <span className="text-red-500">*</span> são obrigatórios.
+              </p>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* ─── Dados Fiscais ─── */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold border-b pb-1">Dados Fiscais</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2"><Label>Razão Social</Label><Input value={formData.razao_social} onChange={e => setFormData({...formData, razao_social: e.target.value})} required /></div>
-                  <div><Label>Nome Fantasia</Label><Input value={formData.nome_fantasia} onChange={e => setFormData({...formData, nome_fantasia: e.target.value})} /></div>
-                  <div><Label>CNPJ</Label><Input value={formData.cnpj} onChange={e => setFormData({...formData, cnpj: e.target.value})} required /></div>
-                  <div><Label>Status</Label>
-                    <select className="flex w-full h-10 border rounded-md px-3 text-sm" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-                      <option value="ativa">Ativa</option><option value="inativa">Inativa</option>
+                  <div className="md:col-span-2 space-y-2">
+                    <RequiredLabel htmlFor="razao_social">Razão Social</RequiredLabel>
+                    <Input
+                      id="razao_social"
+                      value={formData.razao_social}
+                      onChange={e => setFormData({...formData, razao_social: e.target.value})}
+                      placeholder="Razão social completa"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="nome_fantasia">Nome Fantasia</Label>
+                    <Input
+                      id="nome_fantasia"
+                      value={formData.nome_fantasia}
+                      onChange={e => setFormData({...formData, nome_fantasia: e.target.value})}
+                      placeholder="Nome fantasia"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <RequiredLabel htmlFor="cnpj">CNPJ</RequiredLabel>
+                    <Input
+                      id="cnpj"
+                      value={formData.cnpj}
+                      onChange={e => setMasked('cnpj', e.target.value, maskCNPJ)}
+                      placeholder="00.000.000/0000-00"
+                      maxLength={18}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <RequiredLabel htmlFor="status">Status</RequiredLabel>
+                    <select
+                      id="status"
+                      className="flex w-full h-10 border border-input rounded-md bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={formData.status}
+                      onChange={e => setFormData({...formData, status: e.target.value})}
+                    >
+                      <option value="ativa">Ativa</option>
+                      <option value="inativa">Inativa</option>
                     </select>
                   </div>
-                  <div><Label>Inscrição Estadual</Label><Input value={formData.inscricao_estadual} onChange={e => setFormData({...formData, inscricao_estadual: e.target.value})} /></div>
-                  <div><Label>Inscrição Municipal</Label><Input value={formData.inscricao_municipal} onChange={e => setFormData({...formData, inscricao_municipal: e.target.value})} /></div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold border-b pb-1">Endereço</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div><Label>CEP</Label><Input value={formData.cep} onChange={e => setFormData({...formData, cep: e.target.value})} /></div>
-                  <div className="md:col-span-2"><Label>Logradouro</Label><Input value={formData.logradouro} onChange={e => setFormData({...formData, logradouro: e.target.value})} /></div>
-                  <div><Label>Número</Label><Input value={formData.numero} onChange={e => setFormData({...formData, numero: e.target.value})} /></div>
-                  <div><Label>Complemento</Label><Input value={formData.complemento} onChange={e => setFormData({...formData, complemento: e.target.value})} /></div>
-                  <div><Label>Bairro</Label><Input value={formData.bairro} onChange={e => setFormData({...formData, bairro: e.target.value})} /></div>
-                  <div><Label>Cidade</Label><Input value={formData.cidade} onChange={e => setFormData({...formData, cidade: e.target.value})} /></div>
-                  <div><Label>UF</Label><Input value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value})} maxLength={2} /></div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold border-b pb-1">Responsável e Contrato</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><Label>Responsável Principal</Label><Input value={formData.responsavel_nome} onChange={e => setFormData({...formData, responsavel_nome: e.target.value})} /></div>
-                  <div><Label>E-mail do Responsável</Label><Input type="email" value={formData.responsavel_email} onChange={e => setFormData({...formData, responsavel_email: e.target.value})} /></div>
-                  <div><Label>E-mail Principal Empresa</Label><Input type="email" value={formData.email_principal} onChange={e => setFormData({...formData, email_principal: e.target.value})} /></div>
-                  <div><Label>Telefone Principal Empresa</Label><Input value={formData.telefone_principal} onChange={e => setFormData({...formData, telefone_principal: e.target.value})} /></div>
-                  <div><Label>Plano/Modalidade</Label><Input value={formData.plano_contratado} onChange={e => setFormData({...formData, plano_contratado: e.target.value})} /></div>
-                  <div><Label>Início do Contrato</Label><Input type="date" value={formData.data_inicio_contrato} onChange={e => setFormData({...formData, data_inicio_contrato: e.target.value})} /></div>
-                  <div className="md:col-span-2">
-                    <Label>Observações Internas</Label>
-                    <textarea 
-                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" 
-                      value={formData.observacoes_internas} 
-                      onChange={e => setFormData({...formData, observacoes_internas: e.target.value})}
+                  <div className="space-y-2">
+                    <Label htmlFor="inscricao_estadual">Inscrição Estadual</Label>
+                    <Input
+                      id="inscricao_estadual"
+                      value={formData.inscricao_estadual}
+                      onChange={e => setFormData({...formData, inscricao_estadual: e.target.value})}
+                      placeholder="Se aplicável"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="inscricao_municipal">Inscrição Municipal</Label>
+                    <Input
+                      id="inscricao_municipal"
+                      value={formData.inscricao_municipal}
+                      onChange={e => setFormData({...formData, inscricao_municipal: e.target.value})}
+                      placeholder="Se aplicável"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-4 border-t"><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button><Button type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button></div>
+              {/* ─── Contato ─── */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-1">Contato da Empresa</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <RequiredLabel htmlFor="email_principal">E-mail Principal</RequiredLabel>
+                    <Input
+                      id="email_principal"
+                      type="email"
+                      value={formData.email_principal}
+                      onChange={e => setFormData({...formData, email_principal: e.target.value})}
+                      placeholder="contato@empresa.com.br"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <RequiredLabel htmlFor="telefone_principal">Telefone Principal</RequiredLabel>
+                    <Input
+                      id="telefone_principal"
+                      value={formData.telefone_principal}
+                      onChange={e => setMasked('telefone_principal', e.target.value, maskPhone)}
+                      placeholder="(00) 0 0000-0000"
+                      maxLength={16}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ─── Endereço ─── */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-1">Endereço</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="cep">CEP</Label>
+                    <Input
+                      id="cep"
+                      value={formData.cep}
+                      onChange={e => setMasked('cep', e.target.value, maskCEP)}
+                      placeholder="00000-000"
+                      maxLength={9}
+                    />
+                  </div>
+                  <div className="md:col-span-2 space-y-2">
+                    <Label htmlFor="logradouro">Logradouro</Label>
+                    <Input
+                      id="logradouro"
+                      value={formData.logradouro}
+                      onChange={e => setFormData({...formData, logradouro: e.target.value})}
+                      placeholder="Rua, Av., etc."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="numero">Número</Label>
+                    <Input
+                      id="numero"
+                      value={formData.numero}
+                      onChange={e => setFormData({...formData, numero: e.target.value})}
+                      placeholder="Nº"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="complemento">Complemento</Label>
+                    <Input
+                      id="complemento"
+                      value={formData.complemento}
+                      onChange={e => setFormData({...formData, complemento: e.target.value})}
+                      placeholder="Sala, andar..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bairro">Bairro</Label>
+                    <Input
+                      id="bairro"
+                      value={formData.bairro}
+                      onChange={e => setFormData({...formData, bairro: e.target.value})}
+                      placeholder="Bairro"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cidade">Cidade</Label>
+                    <Input
+                      id="cidade"
+                      value={formData.cidade}
+                      onChange={e => setFormData({...formData, cidade: e.target.value})}
+                      placeholder="Cidade"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estado">UF</Label>
+                    <select
+                      id="estado"
+                      className="flex w-full h-10 border border-input rounded-md bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={formData.estado}
+                      onChange={e => setFormData({...formData, estado: e.target.value})}
+                    >
+                      <option value="">Selecione...</option>
+                      {UF_OPTIONS.map(uf => (
+                        <option key={uf} value={uf}>{uf}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* ─── Responsável e Contrato ─── */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-1">Responsável e Contrato</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <RequiredLabel htmlFor="responsavel_nome">Responsável Principal</RequiredLabel>
+                    <Input
+                      id="responsavel_nome"
+                      value={formData.responsavel_nome}
+                      onChange={e => setFormData({...formData, responsavel_nome: e.target.value})}
+                      placeholder="Nome completo"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <RequiredLabel htmlFor="responsavel_email">E-mail do Responsável</RequiredLabel>
+                    <Input
+                      id="responsavel_email"
+                      type="email"
+                      value={formData.responsavel_email}
+                      onChange={e => setFormData({...formData, responsavel_email: e.target.value})}
+                      placeholder="responsavel@empresa.com.br"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="plano_contratado">Plano/Modalidade</Label>
+                    <Input
+                      id="plano_contratado"
+                      value={formData.plano_contratado}
+                      onChange={e => setFormData({...formData, plano_contratado: e.target.value})}
+                      placeholder="Ex: Básico, Premium..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="data_inicio_contrato">Início do Contrato</Label>
+                    <Input
+                      id="data_inicio_contrato"
+                      type="date"
+                      value={formData.data_inicio_contrato}
+                      onChange={e => setFormData({...formData, data_inicio_contrato: e.target.value})}
+                    />
+                  </div>
+                  <div className="md:col-span-2 space-y-2">
+                    <Label htmlFor="observacoes_internas">Observações Internas</Label>
+                    <textarea
+                      id="observacoes_internas"
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={formData.observacoes_internas}
+                      onChange={e => setFormData({...formData, observacoes_internas: e.target.value})}
+                      placeholder="Informações internas sobre a empresa..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                <Button type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
+              </div>
             </form>
           </DialogContent>
         </Dialog>
@@ -330,8 +537,8 @@ export default function Empresas() {
           <DialogHeader><DialogTitle>Unidades / Filiais</DialogTitle><DialogDescription>Gerencie as unidades de {selectedEmpresaForUnidades?.nome_fantasia || selectedEmpresaForUnidades?.nome}</DialogDescription></DialogHeader>
           <form onSubmit={handleAddUnidade} className="space-y-4 border-b pb-4 mb-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2"><Label>Nome da Unidade</Label><Input value={newUnidade.nome} onChange={v => setNewUnidade({...newUnidade, nome: v.target.value})} required/></div>
-              <div className="col-span-2"><Label>Endereço</Label><Input value={newUnidade.endereco} onChange={v => setNewUnidade({...newUnidade, endereco: v.target.value})}/></div>
+              <div className="col-span-2 space-y-2"><RequiredLabel>Nome da Unidade</RequiredLabel><Input value={newUnidade.nome} onChange={v => setNewUnidade({...newUnidade, nome: v.target.value})} required placeholder="Nome da filial/unidade"/></div>
+              <div className="col-span-2 space-y-2"><Label>Endereço</Label><Input value={newUnidade.endereco} onChange={v => setNewUnidade({...newUnidade, endereco: v.target.value})} placeholder="Endereço completo da unidade"/></div>
             </div>
             <Button type="submit" className="w-full" disabled={saving}>Adicionar Unidade</Button>
           </form>

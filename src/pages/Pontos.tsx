@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { supabaseClient } from '@/lib/supabaseClient'
 import { useAuth } from '@/contexts/AuthContext'
 import { type PontoWithDetails } from '@/types/pontos'
-import { Search, Eye, Calendar, Clock, User, Building2, Download, AlertCircle } from 'lucide-react'
+import { Search, Eye, Calendar, Clock, User, Building2, Download, AlertCircle, Loader2 } from 'lucide-react'
 import { sanitizeFilename, fmtDateForFilename, getExtensionFromMimeType } from '@/utils/fileUtils'
 import { getPhotoUrl, refreshPhotoUrl, isPhotoUrlExpired, isFotosBucketPrivate } from '@/utils/photoUrl'
 
@@ -26,6 +26,7 @@ export default function Pontos() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [selectedImagePath, setSelectedImagePath] = useState<string | null>(null)
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false)
+  const [isLoadingImage, setIsLoadingImage] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(false)
   
   // Cache de URLs de fotos para evitar regenerar signed URLs
@@ -156,25 +157,7 @@ export default function Pontos() {
     }
   }, [session])
 
-  // Pré-carregar URLs de fotos dos registros visíveis
-  useEffect(() => {
-    async function preloadPhotoUrls() {
-      const pontosComFoto = pontos.filter(p => p.foto?.storage_path)
-      
-      for (const ponto of pontosComFoto) {
-        const storagePath = ponto.foto!.storage_path
-        
-        // Só carregar se não estiver no cache
-        if (!photoUrls.has(storagePath)) {
-          await resolvePhotoUrl(storagePath)
-        }
-      }
-    }
-    
-    if (pontos.length > 0) {
-      preloadPhotoUrls()
-    }
-  }, [pontos]) // Recarregar quando pontos mudarem
+  // Fotos são carregadas sob demanda ao clicar no botão de visualizar
 
   // Filtrar registros por termo de busca
   const registrosFiltrados = pontos.filter(ponto => {
@@ -200,10 +183,20 @@ export default function Pontos() {
     ? registrosPorData.filter(ponto => ponto.empresa_id === selectedEmpresaId)
     : registrosPorData
 
-  const handleImageClick = (imageUrl: string, storagePath?: string) => {
-    setSelectedImage(imageUrl)
-    setSelectedImagePath(storagePath || null)
+  /** Abre o modal e carrega a foto sob demanda */
+  const handleImageClick = async (storagePath: string) => {
+    setSelectedImage(null)
+    setSelectedImagePath(storagePath)
     setIsImageDialogOpen(true)
+    setIsLoadingImage(true)
+    try {
+      const url = await resolvePhotoUrl(storagePath)
+      setSelectedImage(url)
+    } catch {
+      setSelectedImage(PLACEHOLDER_IMAGE)
+    } finally {
+      setIsLoadingImage(false)
+    }
   }
 
   // Função para resolver URL de foto com verificação de expiração
@@ -532,28 +525,14 @@ export default function Pontos() {
                       </TableCell>
                       <TableCell>
                         {ponto.foto?.storage_path ? (
-                          <div className="flex items-center space-x-2">
-                            <img
-                              src={photoUrls.get(ponto.foto.storage_path) || PLACEHOLDER_IMAGE}
-                              alt="Foto do ponto"
-                              className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80"
-                              onClick={async () => {
-                                const url = await resolvePhotoUrl(ponto.foto!.storage_path)
-                                handleImageClick(url, ponto.foto!.storage_path)
-                              }}
-                              onError={(e) => handleImageError(e, ponto.foto!.storage_path)}
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={async () => {
-                                const url = await resolvePhotoUrl(ponto.foto!.storage_path)
-                                handleImageClick(url, ponto.foto!.storage_path)
-                              }}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Visualizar foto"
+                            onClick={() => handleImageClick(ponto.foto!.storage_path)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                         ) : (
                           <span className="text-muted-foreground">Sem foto</span>
                         )}
@@ -593,9 +572,14 @@ export default function Pontos() {
               Visualize a foto capturada no momento do registro
             </DialogDescription>
           </DialogHeader>
-          {selectedImage && (
-            <div className="space-y-4">
-              <div className="flex justify-center">
+          <div className="space-y-4">
+            <div className="flex justify-center min-h-[200px] items-center">
+              {isLoadingImage ? (
+                <div className="flex flex-col items-center space-y-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <span className="text-sm text-muted-foreground">Carregando foto...</span>
+                </div>
+              ) : selectedImage ? (
                 <img
                   src={selectedImage}
                   alt="Foto do ponto"
@@ -604,22 +588,21 @@ export default function Pontos() {
                     if (selectedImagePath) {
                       handleImageError(e, selectedImagePath)
                     } else {
-                      console.error('[Modal] Erro ao carregar foto')
                       e.currentTarget.src = PLACEHOLDER_IMAGE
                     }
                   }}
                 />
-              </div>
+              ) : null}
+            </div>
+            {selectedImage && !isLoadingImage && (
               <div className="flex justify-center space-x-2">
                 <Button
                   onClick={async () => {
                     const timestamp = fmtDateForFilename(new Date())
                     const filename = `ponto_${timestamp}`
                     
-                    // Se tem path e bucket é privado, verificar expiração
                     if (selectedImagePath && isFotosBucketPrivate()) {
                       if (isPhotoUrlExpired(selectedImagePath)) {
-                        console.debug('[Download] URL expirada, fazendo refresh antes de baixar')
                         const freshUrl = await refreshPhotoUrl(supabaseClient, selectedImagePath)
                         await downloadImage(freshUrl, filename)
                         return
@@ -633,8 +616,8 @@ export default function Pontos() {
                   Baixar Imagem
                 </Button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
