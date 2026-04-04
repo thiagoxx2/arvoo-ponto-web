@@ -11,6 +11,7 @@ export type FolhaPontoPdfData = {
   empresa: {
     nome: string;
     cnpj: string;
+    inscricao_especifica?: string | null;
   };
   colaborador: {
     nome: string;
@@ -19,6 +20,10 @@ export type FolhaPontoPdfData = {
     jornada_contratual: string | null;
     cpf: string | null;
     data_nascimento: string | null;
+    data_admissao: string | null;
+    matricula: string | null;
+    unidade: string | null;
+    setor: string | null;
     horarios_pactuados: string | null;
   };
   periodo: {
@@ -28,13 +33,14 @@ export type FolhaPontoPdfData = {
   diario: Array<{
     data: string;               // "2025-11-01"
     dia: number;                // 1..31
+    dia_semana: string;         // "Seg", "Ter", etc.
     batidas: string[];          // ["08:00","12:00",...]
     total_trabalhado: string;   // "07:53"
     horas_extras: string;       // "00:00"
     atrasos: string;            // "00:00"
     faltas: string;             // "00:00"
     banco_horas_dia: string;    // "00:00"
-    observacao?: string | null; // "SEM_REGISTRO", "PAR_INCOMPLETO"
+    observacao?: string | null; // "FOLGA", "FALTA"
   }>;
   mensal: {
     total_horas_trabalhadas: string;
@@ -69,45 +75,48 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica",
   },
   header: {
-    marginBottom: 20,
-    borderBottom: "2 solid #000",
-    paddingBottom: 10,
+    marginBottom: 10,
+    borderBottom: "1 solid #000",
+    paddingBottom: 5,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 5,
   },
   empresaNome: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  empresaCnpj: {
-    fontSize: 10,
-    marginBottom: 8,
-  },
-  titulo: {
-    fontSize: 14,
-    fontWeight: "bold",
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  periodo: {
-    fontSize: 10,
-    marginBottom: 4,
-  },
-  colaboradorCard: {
-    marginTop: 15,
-    marginBottom: 15,
-    padding: 10,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 4,
-  },
-  colaboradorNome: {
     fontSize: 12,
     fontWeight: "bold",
-    marginBottom: 4,
   },
-  colaboradorInfo: {
-    fontSize: 9,
-    marginTop: 2,
-    color: "#333",
+  empresaInfo: {
+    fontSize: 8,
+    color: "#444",
+  },
+  titulo: {
+    fontSize: 12,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginVertical: 5,
+    textDecoration: "underline",
+  },
+  infoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 5,
+    border: "1 solid #eee",
+    padding: 5,
+  },
+  infoItem: {
+    width: "33%",
+    marginBottom: 3,
+  },
+  infoLabel: {
+    fontSize: 7,
+    fontWeight: "bold",
+    color: "#666",
+  },
+  infoValue: {
+    fontSize: 8,
   },
   table: {
     marginTop: 15,
@@ -131,16 +140,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9f9f9",
   },
   colDia: {
-    width: "8%",
+    width: "6%",
+  },
+  colSemana: {
+    width: "10%",
   },
   colData: {
     width: "12%",
   },
   colBatidas: {
-    width: "20%",
+    width: "22%",
   },
   colTotal: {
-    width: "12%",
+    width: "10%",
   },
   colExtras: {
     width: "10%",
@@ -149,10 +161,10 @@ const styles = StyleSheet.create({
     width: "10%",
   },
   colFaltas: {
-    width: "10%",
+    width: "8%",
   },
   colBanco: {
-    width: "18%",
+    width: "12%",
   },
   resumoMensal: {
     marginTop: 20,
@@ -216,70 +228,92 @@ export default function FolhaPontoPdfDocument({
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Cabeçalho */}
-        <View style={styles.header}>
-          <Text style={styles.empresaNome}>{folha.empresa.nome}</Text>
-          <Text style={styles.empresaCnpj}>CNPJ: {folha.empresa.cnpj}</Text>
-          <Text style={styles.titulo}>FOLHA DE PONTO MENSAL</Text>
-          <Text style={styles.periodo}>{folha.periodo.descricao}</Text>
-        </View>
-
-        {/* Dados do Colaborador */}
-        <View style={styles.colaboradorCard}>
-          <Text style={styles.colaboradorNome}>
-            Colaborador: {folha.colaborador.nome}
-          </Text>
-          {folha.colaborador.cpf && (
-            <Text style={styles.colaboradorInfo}>
-              CPF: {folha.colaborador.cpf}
-            </Text>
-          )}
-          {folha.colaborador.data_nascimento && (
-            <Text style={styles.colaboradorInfo}>
-              Data de Nascimento: {fmtDateBR(folha.colaborador.data_nascimento)}
-            </Text>
-          )}
-          {folha.colaborador.cargo && (
-            <Text style={styles.colaboradorInfo}>
-              Cargo: {folha.colaborador.cargo}
-            </Text>
-          )}
-          {folha.colaborador.regime_contratacao && (
-            <Text style={styles.colaboradorInfo}>
-              Regime de Contratação: {folha.colaborador.regime_contratacao}
-            </Text>
-          )}
-          {(folha.colaborador.horarios_pactuados || folha.colaborador.jornada_contratual) && (
-            <Text style={styles.colaboradorInfo}>
-              Jornada / Horários Pactuados: {folha.colaborador.horarios_pactuados || folha.colaborador.jornada_contratual}
-            </Text>
-          )}
+        {/* Cabeçalho do Empregador e Identificação (Fixo) */}
+        <View style={styles.header} fixed>
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.empresaNome}>{folha.empresa.nome}</Text>
+              <Text style={styles.empresaInfo}>CNPJ/CPF: {folha.empresa.cnpj}</Text>
+              {folha.empresa.inscricao_especifica && (
+                <Text style={styles.empresaInfo}>CEI/CAEPF/CNO: {folha.empresa.inscricao_especifica}</Text>
+              )}
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.empresaInfo}>Emissão: {getDataAtual()}</Text>
+              <Text 
+                style={styles.empresaInfo} 
+                render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} 
+              />
+            </View>
+          </View>
+          
+          <Text style={styles.titulo}>FOLHA DE PONTO</Text>
+          
+          <View style={styles.infoGrid}>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Colaborador</Text>
+              <Text style={styles.infoValue}>{folha.colaborador.nome}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>CPF</Text>
+              <Text style={styles.infoValue}>{folha.colaborador.cpf}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Matrícula</Text>
+              <Text style={styles.infoValue}>{folha.colaborador.matricula || '-'}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Data de Admissão</Text>
+              <Text style={styles.infoValue}>{folha.colaborador.data_admissao ? fmtDateBR(folha.colaborador.data_admissao) : '-'}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Cargo/Função</Text>
+              <Text style={styles.infoValue}>{folha.colaborador.cargo || '-'}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Período</Text>
+              <Text style={styles.infoValue}>{folha.periodo.descricao}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Unidade/Setor</Text>
+              <Text style={styles.infoValue}>{folha.colaborador.unidade || '-'}{folha.colaborador.setor ? ` / ${folha.colaborador.setor}` : ''}</Text>
+            </View>
+            <View style={{ width: '66%' }}>
+              <Text style={styles.infoLabel}>Horário/Jornada Contratual</Text>
+              <Text style={styles.infoValue}>{folha.colaborador.horarios_pactuados || folha.colaborador.jornada_contratual || '-'}</Text>
+            </View>
+          </View>
         </View>
 
         {/* Tabela Diária */}
         <View style={styles.table}>
-          <View style={styles.tableHeader}>
+          <View style={styles.tableHeader} fixed>
             <Text style={styles.colDia}>Dia</Text>
+            <Text style={styles.colSemana}>Semana</Text>
             <Text style={styles.colData}>Data</Text>
-            <Text style={styles.colBatidas}>Entradas / Saídas</Text>
-            <Text style={styles.colTotal}>Total</Text>
+            <Text style={styles.colBatidas}>Marcações</Text>
+            <Text style={styles.colTotal}>Jornada</Text>
             <Text style={styles.colExtras}>Extras</Text>
             <Text style={styles.colAtrasos}>Atrasos</Text>
             <Text style={styles.colFaltas}>Faltas</Text>
-            <Text style={styles.colBanco}>Banco</Text>
+            <Text style={styles.colBanco}>Saldo</Text>
           </View>
           {folha.diario.map((dia, idx) => {
             const batidasTexto = fmtBatidas(dia.batidas);
             
             let batidasComObs = batidasTexto;
             
-            // Verificação robusta caso o texto venha direto da batida ou do observacao
-            if (dia.observacao?.includes('SEM_REGISTRO') || batidasTexto.includes('SEM_REGISTRO') || batidasTexto.includes('SEM REGISTRO')) {
-              batidasComObs = '';
-            } else if (dia.observacao === 'INCOMPLETO' || dia.observacao === 'PAR_INCOMPLETO') {
-              batidasComObs = `${batidasTexto} (INCOMPLETO)`;
+            // Verificação robusta para exibição limpa
+            if (dia.observacao === "FOLGA" || dia.observacao === "FALTA") {
+              batidasComObs = dia.batidas.length > 0 
+                ? `${batidasTexto} ${dia.observacao}` 
+                : dia.observacao;
             } else if (dia.observacao) {
-              batidasComObs = `${batidasTexto} (${dia.observacao})`;
+              batidasComObs = dia.batidas.length > 0 
+                ? `${batidasTexto} ${dia.observacao}` 
+                : dia.observacao;
+            } else if (batidasTexto === "-") {
+              batidasComObs = "";
             }
             return (
               <View
@@ -292,6 +326,7 @@ export default function FolhaPontoPdfDocument({
                 wrap={false}
               >
                 <Text style={styles.colDia}>{String(dia.dia).padStart(2, "0")}</Text>
+                <Text style={styles.colSemana}>{dia.dia_semana.substring(0, 3)}</Text>
                 <Text style={styles.colData}>{fmtDateBR(dia.data)}</Text>
                 <Text style={styles.colBatidas}>{batidasComObs}</Text>
                 <Text style={styles.colTotal}>{dia.total_trabalhado}</Text>
@@ -345,8 +380,7 @@ export default function FolhaPontoPdfDocument({
             <Text>Colaborador</Text>
           </View>
           <View style={styles.assinaturaBox}>
-            <Text>_________________________</Text>
-            <Text>Responsável/Gestor</Text>
+            <Text>Responsável / Gestor</Text>
           </View>
         </View>
 

@@ -88,6 +88,8 @@ export interface Empresa {
   plano_contratado?: string
   data_inicio_contrato?: string
   observacoes_internas?: string
+  tolerancia_diaria_min?: number
+  inscricao_especifica?: string
   
   created_at?: string
   updated_at?: string

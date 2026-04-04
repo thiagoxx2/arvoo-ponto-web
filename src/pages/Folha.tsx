@@ -22,6 +22,10 @@ import {
 import { useEmpresas } from '../hooks/useEmpresas';
 import { useColaboradores } from '../hooks/useColaboradores';
 import { supabase } from '../lib/supabaseClient';
+import { calcularFolhaMensal, formatMinutes } from '../utils/calculosPonto';
+import { type Ponto, type Colaborador } from '../types/pontos';
+
+import { format } from 'date-fns';
 
 // Helper para formatar batidas (mesmo do PDF)
 const fmtBatidas = (b: string[]) => (b?.length ? b.join(" / ") : "-");
@@ -101,36 +105,106 @@ export default function Folha() {
     setError(null);
 
     try {
-      // Montar p_mes_referencia no formato YYYY-MM-01
       const mesNum = mes;
       const anoNum = ano;
       const p_mes_referencia = `${anoNum}-${String(mesNum).padStart(2, "0")}-01`;
+      const p_mes_fim = `${anoNum}-${String(mesNum).padStart(2, "0")}-${new Date(anoNum, mesNum, 0).getDate()} 23:59:59`;
 
-      // Chamar RPC
-      const { data, error: rpcError } = await supabase.rpc("get_folha_ponto_pdf", {
+      // 1. Chamar RPC para obter a estrutura básica (Opcional, mas útil para nomes/labels)
+      const { data: rpcData, error: rpcError } = await supabase.rpc("get_folha_ponto_pdf", {
         p_empresa_id: empresaId,
         p_colaborador_id: colaboradorId,
         p_mes_referencia,
       });
 
-      if (rpcError) {
-        console.error("Erro ao carregar folha:", rpcError);
-        setError("Não foi possível carregar a folha de ponto.");
-        setFolhaData(null);
-        return;
-      }
+      if (rpcError) throw rpcError;
 
-      if (!data) {
-        setError("Nenhuma folha encontrada para o período selecionado.");
-        setFolhaData(null);
-        return;
-      }
+      // 2. Buscar dados completos do colaborador (Escala/Horários)
+      const { data: colaborador, error: colabError } = await supabase
+        .from('colaboradores')
+        .select('*')
+        .eq('id', colaboradorId)
+        .single();
+      
+      if (colabError) throw colabError;
 
-      // Tipar e setar os dados
-      setFolhaData(data as FolhaPontoPdfData);
-    } catch (err) {
-      console.error("Erro inesperado ao carregar folha:", err);
-      setError("Erro inesperado ao carregar a folha de ponto.");
+      // 3. Buscar dados da empresa (Tolerância)
+      const { data: empresa, error: empError } = await supabase
+        .from('empresas')
+        .select('*')
+        .eq('id', empresaId)
+        .single();
+      
+      if (empError) throw empError;
+
+      // 4. Buscar pontos brutos do mês
+      const { data: pontos, error: pontosError } = await supabase
+        .from('pontos')
+        .select('*')
+        .eq('colaborador_id', colaboradorId)
+        .gte('created_at', p_mes_referencia)
+        .lte('created_at', p_mes_fim)
+        .order('created_at', { ascending: true });
+
+      if (pontosError) throw pontosError;
+
+      // 5. Executar Motor de Cálculo Real
+      const summary = calcularFolhaMensal(
+        `${anoNum}-${String(mesNum).padStart(2, "0")}`,
+        pontos as Ponto[],
+        colaborador as Colaborador,
+        empresa.tolerancia_diaria_min ?? 10
+      );
+
+      // 6. Formatar para o estado do componente (FolhaPontoPdfData)
+      const formattedData: FolhaPontoPdfData = {
+        empresa: {
+          nome: empresa.nome_fantasia || empresa.nome || rpcData.empresa.nome,
+          cnpj: empresa.cnpj || rpcData.empresa.cnpj,
+          inscricao_especifica: empresa.inscricao_especifica || null,
+        },
+        colaborador: {
+          nome: colaborador.nome,
+          cargo: colaborador.cargo || null,
+          regime_contratacao: colaborador.tipo_vinculo || null,
+          jornada_contratual: colaborador.horarios_pactuados || null,
+          cpf: colaborador.cpf || null,
+          data_nascimento: colaborador.data_nascimento || null,
+          data_admissao: colaborador.data_admissao || null,
+          matricula: colaborador.matricula || null,
+          unidade: colaborador.unidade || null,
+          setor: colaborador.setor || null,
+          horarios_pactuados: colaborador.horarios_pactuados || null,
+        },
+        periodo: {
+          mes: `${anoNum}-${String(mesNum).padStart(2, "0")}`,
+          descricao: rpcData.periodo.descricao,
+        },
+        diario: summary.days.map((d) => ({
+          data: d.date,
+          dia: parseInt(d.date.split('-')[2]),
+          dia_semana: d.diaSemana,
+          batidas: d.points.map(p => format(new Date(p.created_at), 'HH:mm')),
+          total_trabalhado: formatMinutes(d.totalWorkedMinutes),
+          horas_extras: formatMinutes(d.extrasMinutes),
+          atrasos: formatMinutes(d.delaysMinutes),
+          faltas: d.isAbsence ? formatMinutes(d.totalExpectedMinutes) : "00:00",
+          banco_horas_dia: formatMinutes(d.extrasMinutes - d.delaysMinutes),
+          observacao: d.isAbsence ? "FALTA" : !d.isWorkDay ? "FOLGA" : null,
+        })),
+        mensal: {
+          total_horas_trabalhadas: formatMinutes(summary.totalWorkedMinutes),
+          total_horas_extras: formatMinutes(summary.totalExtrasMinutes),
+          total_atrasos: formatMinutes(summary.totalDelaysMinutes),
+          total_faltas: String(summary.totalAbsences),
+          banco_horas_final: formatMinutes(summary.bankBalanceMinutes),
+        },
+      };
+
+      setFolhaData(formattedData);
+    } catch (err: any) {
+      console.error("Erro ao processar folha:", err);
+      setError(err.message || "Erro inesperado ao carregar a folha de ponto.");
       setFolhaData(null);
     } finally {
       setLoading(false);
@@ -414,11 +488,22 @@ export default function Folha() {
                 <TableBody>
                   {folhaData.diario.map((dia) => {
                     const batidasTexto = fmtBatidas(dia.batidas);
-                    const batidasComObs = dia.observacao && (dia.observacao.includes("SEM_REGISTRO") || dia.observacao.includes("SEM REGISTRO"))
-                      ? ""
-                      : dia.observacao
-                        ? `${batidasTexto} (${dia.observacao})`
-                        : batidasTexto;
+                    
+                    let batidasComObs = batidasTexto;
+                    
+                    if (dia.observacao === "FOLGA" || dia.observacao === "FALTA") {
+                      // Se tem batidas MAS é folga (trabalho em dia de folga), mostra batidas + status limpo
+                      // Se não tem batidas, mostra APENAS o status
+                      batidasComObs = dia.batidas.length > 0 
+                        ? `${batidasTexto} ${dia.observacao}` 
+                        : dia.observacao;
+                    } else if (dia.observacao) {
+                      batidasComObs = dia.batidas.length > 0 
+                        ? `${batidasTexto} ${dia.observacao}` 
+                        : dia.observacao;
+                    } else if (batidasTexto === "-") {
+                      batidasComObs = "";
+                    }
                     
                     return (
                       <TableRow key={dia.data}>
