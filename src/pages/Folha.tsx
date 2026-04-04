@@ -190,7 +190,7 @@ export default function Folha() {
           atrasos: formatMinutes(d.delaysMinutes),
           faltas: d.isAbsence ? formatMinutes(d.totalExpectedMinutes) : "00:00",
           banco_horas_dia: formatMinutes(d.extrasMinutes - d.delaysMinutes),
-          observacao: d.isAbsence ? "FALTA" : !d.isWorkDay ? "FOLGA" : null,
+          observacao: d.isAbsence ? "FALTA" : (!d.isWorkDay && d.points.length === 0) ? "FOLGA" : null,
         })),
         mensal: {
           total_horas_trabalhadas: formatMinutes(summary.totalWorkedMinutes),
