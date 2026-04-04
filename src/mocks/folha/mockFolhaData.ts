@@ -4,15 +4,20 @@ export const mockFolhaData: FolhaPontoPdfData = {
   empresa: {
     nome: "Yum Café",
     cnpj: "62.173.620/0001-80",
+    inscricao_especifica: "123.456.789-00",
   },
   colaborador: {
     nome: "Sara",
     cargo: "Atendente",
     regime_contratacao: "CLT",
     jornada_contratual: "44h semanais",
-    cpf: null,
-    data_nascimento: null,
-    horarios_pactuados: null,
+    cpf: "123.456.789-00",
+    data_nascimento: "1995-05-15",
+    data_admissao: "2023-01-10",
+    matricula: "001",
+    unidade: "Matriz",
+    setor: "Atendimento",
+    horarios_pactuados: "08:00 - 12:00 / 13:00 - 17:00",
   },
   periodo: {
     mes: "2025-11",
@@ -22,6 +27,7 @@ export const mockFolhaData: FolhaPontoPdfData = {
     {
       data: "2025-11-01",
       dia: 1,
+      dia_semana: "Sábado",
       batidas: ["08:00", "12:00", "13:00", "17:00"],
       total_trabalhado: "08:00",
       horas_extras: "00:00",
@@ -33,6 +39,7 @@ export const mockFolhaData: FolhaPontoPdfData = {
     {
       data: "2025-11-02",
       dia: 2,
+      dia_semana: "Domingo",
       batidas: [],
       total_trabalhado: "00:00",
       horas_extras: "00:00",
@@ -44,6 +51,7 @@ export const mockFolhaData: FolhaPontoPdfData = {
     {
       data: "2025-11-03",
       dia: 3,
+      dia_semana: "Segunda-feira",
       batidas: ["08:15", "12:00", "13:00", "17:00"],
       total_trabalhado: "07:45",
       horas_extras: "00:00",
@@ -55,6 +63,7 @@ export const mockFolhaData: FolhaPontoPdfData = {
     {
       data: "2025-11-04",
       dia: 4,
+      dia_semana: "Terça-feira",
       batidas: ["08:00", "12:00"],
       total_trabalhado: "04:00",
       horas_extras: "00:00",
@@ -66,6 +75,7 @@ export const mockFolhaData: FolhaPontoPdfData = {
     {
       data: "2025-11-05",
       dia: 5,
+      dia_semana: "Quarta-feira",
       batidas: ["08:00", "12:00", "13:00", "17:00"],
       total_trabalhado: "08:00",
       horas_extras: "00:00",
@@ -77,6 +87,7 @@ export const mockFolhaData: FolhaPontoPdfData = {
     {
       data: "2025-11-06",
       dia: 6,
+      dia_semana: "Quinta-feira",
       batidas: ["08:00", "12:00", "13:00", "18:00"],
       total_trabalhado: "09:00",
       horas_extras: "01:00",
@@ -88,6 +99,7 @@ export const mockFolhaData: FolhaPontoPdfData = {
     {
       data: "2025-11-07",
       dia: 7,
+      dia_semana: "Sexta-feira",
       batidas: [],
       total_trabalhado: "00:00",
       horas_extras: "00:00",
